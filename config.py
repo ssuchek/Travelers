@@ -26,12 +26,13 @@ STOP_WORDS = stopwords.words('english') + ['per', 'one', 'two', 'three', 'four',
                                                   'anti', 'full', 'large', 'small', 'high', 'hour',
                                                   'period', 'rfg']
 
-STOP_CLAIMS = ["reset", "detach & reset", "remove & reset", "restore & repair", "move", "clean", 
-            "cleaning", "content manipulation", "cont", "tear", "repair", "installed", "block and pad furniture", 
-            "furniture repair", "apperance allowance", "add", "fees", "labor", "fill in", "replace",
+STOP_CLAIMS = ["reset", "detach & reset", "detach and reset", "remove & reset", "remove and reset", "restore & repair", "restore and repair", 
+            "move", "clean", "cleaning", "content manipulation", "cont", "tear", "repair", "installed", "block and pad furniture", 
+            "furniture repair", "apperance allowance", "add", "fees", "labor", "fill in", "replace", "operator", "only labor", "only labour"
             "bulgary", "robbery", "mysterious disappearance", "civil unrest"]
 
 STOP_SMALL_ITEM_CLAIMS = ["fabric softener", "knick knacks"]
+STOP_DONATED_REPURPOSED_CLAIMS = ["laptop cover", "camera bag", "artwork"]
 
 ALL_STOP_WORDS = STOP_WORDS + STOP_CLAIMS + STOP_SMALL_ITEM_CLAIMS
 

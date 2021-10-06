@@ -1,5 +1,6 @@
 import collections
 import ijson
+import inflect
 import itertools
 import json
 import logging
@@ -209,26 +210,16 @@ class ClaimDataLoader(object):
         :param tag_col:         name of the tag column
         :param tag:             an input tag to incorporate in tag column
         """
-        if tag_col == "category":
-            tag_mask = (data[tag_col].fillna("") != "")
-            log_and_warn("{}/{} items already belong to {} or other lists".format((mask & tag_mask).sum(),
+        tag_mask = data[tag_col].fillna("").str.contains(tag+",") | data[tag_col].fillna("").str.contains(","+tag) | (data[tag_col] == tag)
+        log_and_warn("{}/{} items are previously tagged as {}: no need to retag".format((mask & tag_mask).sum(),
                                                                     data.shape[0],
                                                                     tag
-                                                                )
-                        )
-        else:
-            tag_mask = data[tag_col].fillna("").str.contains(tag+",") | data[tag_col].fillna("").str.contains(","+tag) | (data[tag_col] == tag)
-            logging.warning("{}/{} items are already tagged as {}".format((mask & tag_mask).sum(),
-                                                                    data.shape[0],
-                                                                    tag
-                                                                )
-                        )
+                                                                ))
 
-        logging.warning("Tagged {}/{} items as {}".format((mask & (~tag_mask)).sum(),
+        log_and_warn("Tagged {}/{} items as {}".format((mask & (~tag_mask)).sum(),
                                                                     data.shape[0],
                                                                     tag
-                                                                )
-                       )
+                                                                ))
         def add_tag_to_str(x, tag):
             
             if x == "":
@@ -245,9 +236,10 @@ class ClaimDataLoader(object):
         return data
 
     @read_if_exist_decorator
-    def calculate_categories(self, categories, filename, data=None):
+    def calculate_categories(self, claims, categories, filename, data=None):
 
         if data is None:
+            data = claims.copy()
             data["category"] = ""
             data["subcategory"] = ""    
 
@@ -255,10 +247,17 @@ class ClaimDataLoader(object):
                 logging.info("Processing category {}...".format(category))
                 for subcategory, pattern in subcategory_map.items():
                     logging.info("Processing subcategory {}...".format(subcategory))
-                    mask = data["subcategory_prev"].astype(str).str.contains(pattern, flags=re.IGNORECASE, regex=True)
-                    data = self.add_tag(data, mask, "category", category)
-                    data = self.add_tag(data, mask, "subcategory", subcategory)
-                logging.warning("Total {}/{} items belong to {}".format((data["category"] == category).sum(),
+                    logging.info("Search pattern: {}".format(pattern))
+                    subcategory_mask = data["subcategory_prev"].astype(str).str.contains(pattern, flags=re.IGNORECASE, regex=True) | data["item_description"].astype(str).str.contains(pattern, flags=re.IGNORECASE, regex=True)
+                    if subcategory_mask.sum() > 0:
+                        log_and_warn("Total {}/{} items belong to subcategory {}".format(subcategory_mask.sum(),
+                                                                                data.shape[0],
+                                                                                subcategory
+                                                                            ))
+                        data = self.add_tag(data, subcategory_mask, "category", category)
+                        data = self.add_tag(data, subcategory_mask, "subcategory", subcategory)
+                category_mask = (data["category"] == category)
+                log_and_warn("Total {}/{} items belong to category {}".format(category_mask.sum(),
                                                                                 data.shape[0],
                                                                                 category
                                                                             ))
@@ -272,19 +271,16 @@ class ClaimDataLoader(object):
         categories_stats["category"] = {}
 
         for category, subcategory_map in categories.items():
-            logging.info("Processing category {}...".format(category))
+            logging.info("Calculating stats for category {}...".format(category))
             cat_mask = data["category"].fillna("").str.contains(category+",") | data["category"].fillna("").str.contains(","+category) | (data["category"] == category)
             categories_stats["category"][category] = {}
             categories_stats["category"][category]["subcategory"] = {}
             categories_stats["category"][category]["totalcount"] = str(cat_mask.sum())
             for subcategory, _ in subcategory_map.items():
-                logging.info("Processing subcategory {}...".format(subcategory))
+                logging.info("Calculating stats for subcategory {}...".format(subcategory))
                 subcat_mask = data["subcategory"].fillna("").str.contains(subcategory+",") | data["subcategory"].fillna("").str.contains(","+subcategory) | (data["subcategory"] == subcategory)
                 categories_stats["category"][category]["subcategory"][subcategory] = {}
                 categories_stats["category"][category]["subcategory"][subcategory]["totalcount"] = str(subcat_mask.sum())
-            
-        #categories_stats_df = pd.DataFrame.from_dict(categories_stats).sort_values(by=['totalcount'], ascending=False)
-        #self.save_data_to_json(categories_stats, filename, indent=4)
 
         logging.info(categories_stats)
 

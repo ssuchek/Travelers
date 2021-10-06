@@ -1,8 +1,6 @@
 import os
-import re
-import sys
+import inflect
 import json
-import xlrd
 import logging
 
 import config as constants
@@ -52,13 +50,16 @@ def main():
     with open(schema_file, "r") as f:
         category_map = json.load(f)
 
+    engine = inflect.engine()
+
     category_regex = {}
     for category, subcategory_map in category_map.items(): 
         category_regex[category] = {}
         for subcategory, patterns in subcategory_map.items():
+            patterns.extend([engine.plural(p) for p in patterns])
             category_regex[category][subcategory] = "|".join([format_and_regex(p) for p in patterns])
 
-    claim_data = loader.calculate_categories(categories=category_regex, filename=config["data"]["categorised_data"].format(extension="csv"))
+    claim_data = loader.calculate_categories(claims=claim_data, categories=category_regex, filename=config["data"]["categorised_data"].format(extension="csv"))
 
     loader.calculate_categories_stats(claim_data, category_regex, config["data"]["stats_file"].format(extension="json"))
 
