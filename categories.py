@@ -12,7 +12,7 @@ import pandas as pd
 from utils.loader.loader import ClaimDataLoader
 
 from utils.helpers import format_and_regex
-from utils.logging.helpers import log_initialize
+from utils.logging.helpers import log_and_warn, log_initialize
 
 log_initialize(
     file_path=config["logging"]["log_path_claim_data"],
@@ -34,6 +34,18 @@ def main():
     loaded_data = loader.load_claim_data(filename=config["data"]["raw_file"].format(extension="csv"), input_files=claim_files)
 
     claim_data = loader.preprocess_claims(claims=loaded_data, filename=config["data"]["preprocessed_file"].format(extension='csv'))
+
+    logging.info("Considering only claims located in Texas")
+    texas_mask = (claim_data["state"] == "TX")
+
+    if texas_mask.sum() > 0:
+        log_and_warn("Total {}/{} claims are located in Texas".format(texas_mask.sum(),
+                                                                    claim_data.shape[0],
+                                                                ))
+        claim_data = claim_data[texas_mask]
+    else:
+        logging.error("No claims are located in Texas")
+        raise Exception("Claim processing error due to exception: no claims are located in Texas")
 
     word_frequency_data = loader.most_frequent_words(claim_data, config["data"]["word_frequency"])
     loader.plot_most_frequent_words(word_frequency_data, config["figures"]["word_frequency"])

@@ -163,7 +163,7 @@ class ClaimDataLoader(object):
             data = claims.copy()
 
             basic_preprocessor = Preprocessor(BASIC_PREPROCESS)
-            claim_data = basic_preprocessor.calculate(data)
+            data = basic_preprocessor.calculate(data)
 
             stop_claims = "|".join([format_and_regex(p) for p in constants.ALL_STOP_CLAIMS])
 
@@ -174,6 +174,8 @@ class ClaimDataLoader(object):
                                                                                                         data.shape[0]
                                                                                                         ))
                 data = data[~stop_claims_mask]
+
+            data = self.match_zip_codes(data)
 
             self.save_data_to_csv(data, filename, index=False)
 
@@ -293,7 +295,7 @@ class ClaimDataLoader(object):
 
         return data
 
-    def calculate_categories_stats(self, data, categories, filename):
+    def calculate_categories_stats(self, data, categories, filename, states=["TX"]):
 
         if not os.path.exists(filename):
             categories_stats = {}
@@ -346,24 +348,60 @@ class ClaimDataLoader(object):
         if data is None:
             data = claims.copy()
 
-            states = []
-            zipcode_data = self.load_zipcode_map(filename=config["data"]["zip_map"], states=states)
+            no_zip_mask = data["zip"].isna()
 
-            if zipcode_data is None:
-                log_and_warn("No ZIP data loaded. Returning initial data set")
-                return data
-            
-            data = data[[column, "zip"]].merge(zipcode_data[["zip", "primary_city", "state", "county"]], how="left", on=["zip"])
+            if no_zip_mask.sum() > 0:
+                log_and_warn("Total {}/{} claims have no ZIP code associated".format(no_zip_mask.sum(),
+                                                                                            data.shape[0]
+                                                                                            ))
+
+            data = data[~no_zip_mask]
 
             data[column] = data[column].str.split(',', expand=True)
             data = data.drop_duplicates(subset=[column, "zip"])
+            data["zip"] = data["zip"].astype(int)
 
-            data = data[[column, "zip", "state"]].groupby([column]).agg({
-                                    "zip" : aggregate_col_values_to_comma_list,
-                                    "state" : aggregate_col_values_to_comma_list
+            data = data[[column, "zip"]].groupby([column]).agg({
+                                    "zip" : aggregate_col_values_to_comma_list
                                     })
 
             self.save_data_to_csv(data, filename)
+
+        return data
+
+    def match_zip_codes(self, data):
+
+        no_zip_mask = data["zip"].isna()
+
+        if no_zip_mask.sum() > 0:
+            log_and_warn("Total {}/{} claims have no ZIP code associated".format(no_zip_mask.sum(),
+                                                                                        data.shape[0]
+                                                                                        ))
+        states = []
+        zipcode_data = self.load_zipcode_map(filename=config["data"]["zip_map"], states=states)
+
+        if zipcode_data is None:
+            log_and_warn("No ZIP data loaded. Returning initial data set")
+            return data
+                
+        data = data.merge(zipcode_data[["zip", "primary_city", "state", "county"]], suffixes=("_claim", "_zip"), how="left", on=["zip"])
+
+        wrong_state_mask = (data["state_claim"] != data["state_zip"])
+                
+        if wrong_state_mask.sum() > 0:
+            log_and_warn("Total {}/{} claims have wrong state associated".format(wrong_state_mask.sum(),
+                                                                                        data.shape[0]
+                                                                                        ))
+        outside_texas_mask = (data["state_zip"] != "TX")
+        
+        if outside_texas_mask.sum() > 0:
+            log_and_warn("Total {}/{} claims have ZIP codes outside Texas".format(outside_texas_mask.sum(),
+                                                                                        data.shape[0]
+                                                                                        ))
+        
+        data = data.drop(columns=[c for c in data.columns if c.endswith("_claim")])
+        
+        data = data.rename(columns={"state_zip" : "state"})
 
         return data
 
