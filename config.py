@@ -34,7 +34,7 @@ STOP_CLAIMS = ["reset", "detach & reset", "detach and reset", "remove & reset", 
 STOP_SMALL_ITEM_CLAIMS = ["fabric softener", "knick knacks"]
 STOP_DONATED_REPURPOSED_CLAIMS = ["laptop cover", "camera bag", "artwork"]
 
-ALL_STOP_WORDS = STOP_WORDS + STOP_CLAIMS + STOP_SMALL_ITEM_CLAIMS
+ALL_STOP_CLAIMS = STOP_CLAIMS + STOP_SMALL_ITEM_CLAIMS + STOP_DONATED_REPURPOSED_CLAIMS
 
 FIELD_RENAME_MAP = {
     "category_description" : "subcategory_prev",
@@ -46,4 +46,8 @@ FIELD_RENAME_MAP = {
     "ITM_QTY" : "item_quantity",
     "count1" : "count"
 }
+
+ZIP_DB_FIELDS = [
+    "zip", "primary_city", "state", "county", "housing_count", "population_count"
+]
 

@@ -12,5 +12,6 @@ BASIC_PREPROCESS = [
     PreprocessTransformation("item_description", "item_description", "remove_stop_words"),
     PreprocessTransformation("item_description", "item_description", "remove_non_alphabetical_words"),
     PreprocessTransformation("item_description", "item_description", "remove_one_letter_words"),
-    PreprocessTransformation("item_description", "item_description", "strip_values")
+    PreprocessTransformation("item_description", "item_description", "strip_values"),
+    PreprocessTransformation("zip", "zip", "to_numeric")
 ]

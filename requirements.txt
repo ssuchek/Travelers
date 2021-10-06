@@ -1,5 +1,6 @@
 aiohttp==3.7.4.post0
 decorator==5.0.7
+folium==0.12.1
 ijson==3.1.4
 inflect==5.3.0
 matplotlib==3.4.1

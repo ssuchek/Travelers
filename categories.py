@@ -11,9 +11,6 @@ import pandas as pd
 
 from utils.loader.loader import ClaimDataLoader
 
-from utils.preprocess import Preprocessor, PreprocessTransformation
-from utils.preprocess import BASIC_PREPROCESS
-
 from utils.helpers import format_and_regex
 from utils.logging.helpers import log_initialize
 
@@ -36,8 +33,7 @@ def main():
     logging.info("Loading data from files {}".format(claim_files))
     loaded_data = loader.load_claim_data(filename=config["data"]["raw_file"].format(extension="csv"), input_files=claim_files)
 
-    basic_preprocessor = Preprocessor(BASIC_PREPROCESS)
-    claim_data = basic_preprocessor.calculate(loaded_data)
+    claim_data = loader.preprocess_claims(claims=loaded_data, filename=config["data"]["preprocessed_file"].format(extension='csv'))
 
     word_frequency_data = loader.most_frequent_words(claim_data, config["data"]["word_frequency"])
     loader.plot_most_frequent_words(word_frequency_data, config["figures"]["word_frequency"])
@@ -62,6 +58,9 @@ def main():
     claim_data = loader.calculate_categories(claims=claim_data, categories=category_regex, filename=config["data"]["categorised_data"].format(extension="csv"))
 
     loader.calculate_categories_stats(claim_data, category_regex, config["data"]["stats_file"].format(extension="json"))
+
+    category_zipcode_map = loader.calculate_zip_code_mapping(claims=claim_data, column="category", filename=config["data"]["category_zip_data"].format(extension="csv"))
+    subcategory_zipcode_map = loader.calculate_zip_code_mapping(claims=claim_data, column="subcategory", filename=config["data"]["subcategory_zip_data"].format(extension="csv"))
 
 if __name__ == '__main__':
     main()

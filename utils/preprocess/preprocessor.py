@@ -18,7 +18,7 @@ def remove_spaces_and_strip(func):
     @functools.wraps(func)
     def wrapper_remove_and_strip(*args, **kwargs):
         col = func(*args, **kwargs)
-        col = col.str.replace(r"\s\s+", " ")
+        col = col.str.replace(r"\s\s+", " ", regex=True)
         col = col.str.strip()
         return col
     return wrapper_remove_and_strip
@@ -219,7 +219,7 @@ class PreprocessTransformation():
         Remove two and more successive empty spaces
         :param col                          an input column Series object
         """
-        return col.str.replace(r"\s\s+", " ")
+        return col.str.replace(r"\s\s+", " ", regex=True)
 
     @staticmethod
     @remove_spaces_and_strip
@@ -228,11 +228,11 @@ class PreprocessTransformation():
         Replace delimiters with an empty space
         :param col                          an input column Series object
         """
-        return col.str.replace(r"[^\w\s]+", " ")
+        return col.str.replace(r"[^\w\s]+", " ", regex=True)
 
     @staticmethod
     @remove_spaces_and_strip
-    def remove_stop_words(col, stopwords=constants.ALL_STOP_WORDS):
+    def remove_stop_words(col, stopwords=constants.STOP_WORDS):
         """
         Replace stopwords by space
         Default patterns:  ENGLISH_STOP_WORDS

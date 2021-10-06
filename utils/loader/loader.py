@@ -1,6 +1,5 @@
 import collections
 import ijson
-import inflect
 import itertools
 import json
 import logging
@@ -15,11 +14,17 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
 import config as constants
 from config import config
 
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
+from utils.preprocess import Preprocessor, PreprocessTransformation
+from utils.preprocess import BASIC_PREPROCESS
+from utils.preprocess.dataframe import aggregate_col_values_to_comma_list
+
+from utils.helpers import format_and_regex
 
 def read_if_exist_decorator(get_data):
     def _read_file_if_exists(*args, **kwargs):
@@ -147,8 +152,31 @@ class ClaimDataLoader(object):
 
             data = data.rename(columns=constants.FIELD_RENAME_MAP)
             
-            self.save_data_to_csv(data, filename.format(extension='csv'), index=False)
+            self.save_data_to_csv(data, filename, index=False)
         
+        return data
+
+    @read_if_exist_decorator
+    def preprocess_claims(self, claims, filename, data=None):
+
+        if data is None:
+            data = claims.copy()
+
+            basic_preprocessor = Preprocessor(BASIC_PREPROCESS)
+            claim_data = basic_preprocessor.calculate(data)
+
+            stop_claims = "|".join([format_and_regex(p) for p in constants.ALL_STOP_CLAIMS])
+
+            stop_claims_mask = data["subcategory_prev"].astype(str).str.contains(stop_claims, flags=re.IGNORECASE, regex=True) | data["item_description"].astype(str).str.contains(stop_claims, flags=re.IGNORECASE, regex=True)
+
+            if stop_claims_mask.sum() > 0:
+                log_and_warn("Total {}/{} claims are filtered out according to ALL_STOP_CLAIMS".format(stop_claims_mask.sum(),
+                                                                                                        data.shape[0]
+                                                                                                        ))
+                data = data[~stop_claims_mask]
+
+            self.save_data_to_csv(data, filename, index=False)
+
         return data
 
     def most_frequent_words(self, data, filename):
@@ -267,24 +295,79 @@ class ClaimDataLoader(object):
 
     def calculate_categories_stats(self, data, categories, filename):
 
-        categories_stats = {}
-        categories_stats["category"] = {}
+        if not os.path.exists(filename):
+            categories_stats = {}
+            categories_stats["category"] = {}
 
-        for category, subcategory_map in categories.items():
-            logging.info("Calculating stats for category {}...".format(category))
-            cat_mask = data["category"].fillna("").str.contains(category+",") | data["category"].fillna("").str.contains(","+category) | (data["category"] == category)
-            categories_stats["category"][category] = {}
-            categories_stats["category"][category]["subcategory"] = {}
-            categories_stats["category"][category]["totalcount"] = str(cat_mask.sum())
-            for subcategory, _ in subcategory_map.items():
-                logging.info("Calculating stats for subcategory {}...".format(subcategory))
-                subcat_mask = data["subcategory"].fillna("").str.contains(subcategory+",") | data["subcategory"].fillna("").str.contains(","+subcategory) | (data["subcategory"] == subcategory)
-                categories_stats["category"][category]["subcategory"][subcategory] = {}
-                categories_stats["category"][category]["subcategory"][subcategory]["totalcount"] = str(subcat_mask.sum())
+            for category, subcategory_map in categories.items():
+                logging.info("Calculating stats for category {}...".format(category))
+                cat_mask = data["category"].fillna("").str.contains(category+",") | data["category"].fillna("").str.contains(","+category) | (data["category"] == category)
+                categories_stats["category"][category] = {}
+                categories_stats["category"][category]["subcategory"] = {}
+                categories_stats["category"][category]["totalcount"] = str(cat_mask.sum())
+                for subcategory, _ in subcategory_map.items():
+                    logging.info("Calculating stats for subcategory {}...".format(subcategory))
+                    subcat_mask = data["subcategory"].fillna("").str.contains(subcategory+",") | data["subcategory"].fillna("").str.contains(","+subcategory) | (data["subcategory"] == subcategory)
+                    categories_stats["category"][category]["subcategory"][subcategory] = {}
+                    categories_stats["category"][category]["subcategory"][subcategory]["totalcount"] = str(subcat_mask.sum())
 
-        logging.info(categories_stats)
+            logging.info(categories_stats)
 
-        with open(filename, "w") as f:
-            json.dump(categories_stats, f, ensure_ascii=False, indent=4)
+            with open(filename, "w") as f:
+                json.dump(categories_stats, f, ensure_ascii=False, indent=4)
+        else:
+            log_and_warn("File {} already exists: delete it to recreate a new one".format(filename))
+
+    @read_if_exist_decorator
+    def load_zipcode_map(self, filename, states=[], data=None):
+
+        if data is None:
+            logging.error("ZIP code database not found")
+            raise Exception("Zip mapping failed due to exception: ZIP code database not found")
+
+        try:
+            data = data[constants.ZIP_DB_FIELDS]
+        except Exception as e:
+            logging.error("Failed to load data from ZIP code database")
+            raise Exception(e)
+
+        if len(states) > 0:
+            state_mask = data["state"].isin(states)
+
+            if state_mask.sum() > 0:
+                logging.info("Found {} valid ZIP codes for states {}".format(state_mask.sum(), states))
+                data = data[state_mask]
+                
+        return data
+
+    @read_if_exist_decorator
+    def calculate_zip_code_mapping(self, claims, column, filename, data=None):
+
+        if data is None:
+            data = claims.copy()
+
+            states = []
+            zipcode_data = self.load_zipcode_map(filename=config["data"]["zip_map"], states=states)
+
+            if zipcode_data is None:
+                log_and_warn("No ZIP data loaded. Returning initial data set")
+                return data
+            
+            data = data[[column, "zip"]].merge(zipcode_data[["zip", "primary_city", "state", "county"]], how="left", on=["zip"])
+
+            data[column] = data[column].str.split(',', expand=True)
+            data = data.drop_duplicates(subset=[column, "zip"])
+
+            data = data[[column, "zip", "state"]].groupby([column]).agg({
+                                    "zip" : aggregate_col_values_to_comma_list,
+                                    "state" : aggregate_col_values_to_comma_list
+                                    })
+
+            self.save_data_to_csv(data, filename)
+
+        return data
+
+        
+            
 
 
