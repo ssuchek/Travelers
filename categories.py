@@ -69,10 +69,23 @@ def main():
 
     claim_data = loader.calculate_categories(claims=claim_data, categories=category_regex, filename=config["data"]["categorised_data"].format(extension="csv"))
 
-    loader.calculate_categories_stats(claim_data, category_regex, config["data"]["stats_file"].format(extension="json"))
+    loader.calculate_categories_stats(claim_data, category_regex, config["data"]["stats_file"])
 
-    category_zipcode_map = loader.calculate_zip_code_mapping(claims=claim_data, column="category", filename=config["data"]["category_zip_data"].format(extension="csv"))
-    subcategory_zipcode_map = loader.calculate_zip_code_mapping(claims=claim_data, column="subcategory", filename=config["data"]["subcategory_zip_data"].format(extension="csv"))
+    loader.calculate_claim_reports(claim_data, config["data"]["claim_report"], type="yearly")
+    loader.calculate_claim_reports(claim_data, config["data"]["claim_report"], type="bp")
+
+    loader.calculate_zip_code_mapping(claims=claim_data, column="category", filename=config["data"]["category_zip_data"].format(extension="xlsx"))
+    loader.calculate_zip_code_mapping(claims=claim_data, column="subcategory", filename=config["data"]["subcategory_zip_data"].format(extension="xlsx"))
+
+    primary_cities = ["Austin", "Dallas", "Houston"]
+    
+    zip_mapping_filename_path = config["data"]["category_zip_data"].split("/")
+    zip_mapping_filename = "/".join(zip_mapping_filename_path[:-1]) + "/" + "_".join("_".join(city.split(" ")) for city in primary_cities) + "_" + zip_mapping_filename_path[-1].format(extension="xlsx")
+    loader.calculate_zip_code_mapping(claims=claim_data, column="category", filename=zip_mapping_filename, primary_cities=primary_cities)
+
+    zip_mapping_filename_path = config["data"]["subcategory_zip_data"].split("/")
+    zip_mapping_filename = "/".join(zip_mapping_filename_path[:-1]) + "/" + "_".join("_".join(city.split(" ")) for city in primary_cities) + "_" + zip_mapping_filename_path[-1].format(extension="xlsx")
+    loader.calculate_zip_code_mapping(claims=claim_data, column="subcategory", filename=zip_mapping_filename, primary_cities=primary_cities)
 
 if __name__ == '__main__':
     main()
