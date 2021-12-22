@@ -1,15 +1,15 @@
 """
 Preprocessor and PreprocessTransformation classes
 """
-
+import functools
 import logging
+import re
+
 import numpy as np
 import pandas as pd
 
 import config as constants
 from config import config
-
-import functools
 
 from utils.logging.helpers import log_and_warn
 
@@ -18,8 +18,8 @@ def remove_spaces_and_strip(func):
     @functools.wraps(func)
     def wrapper_remove_and_strip(*args, **kwargs):
         col = func(*args, **kwargs)
-        col = col.str.replace(r"\s\s+", " ", regex=True)
-        col = col.str.strip()
+        col = col.astype(str).str.replace(r"\s\s+", " ", regex=True)
+        col = col.astype(str).str.strip()
         return col
     return wrapper_remove_and_strip
 
@@ -191,7 +191,7 @@ class PreprocessTransformation():
     def strip_and_lower(col):
         """Transforms string column to lower case and strips leading and trailing spaces
         """
-        return col.str.strip().str.lower()
+        return col.astype(str).str.strip().str.lower()
 
     @staticmethod
     def empty_string_to_na(col):
@@ -211,52 +211,59 @@ class PreprocessTransformation():
         Strips leading and trailing spaces
         :param col                          an input column Series object
         """
-        return col.str.strip()
+        return col.astype(str).str.strip()
 
     @staticmethod
     def remove_extra_spaces(col):
         """
-        Remove two and more successive empty spaces
+        Remove multiple whitespaces with a single whitespace
         :param col                          an input column Series object
         """
-        return col.str.replace(r"\s\s+", " ", regex=True)
+        return col.astype(str).str.replace(r"\s\s+", " ", regex=True)
 
     @staticmethod
     @remove_spaces_and_strip
     def remove_punctuation(col):
         """
-        Replace delimiters with an empty space
+        Replace with a single whitespace:
+        - All non-alphabetical and non-numerical symbols except "_", "/", ";","-"
+        - Multiple whitespaces
+        - All parentheses
         :param col                          an input column Series object
         """
-        return col.str.replace(r"[^\w\s]+", " ", regex=True)
+        col_copy = col.copy()
+        col_copy = col_copy.astype(str).str.replace(r"[^a-zA-Z0-9\_\/\;\-\s]+", " ", regex=True)
+        col_copy = col_copy.astype(str).str.replace(r"[\(\[\{\}\)\]]+", " ", regex=True)
+        return col_copy
 
     @staticmethod
     @remove_spaces_and_strip
     def remove_stop_words(col, stopwords=constants.STOP_WORDS):
         """
-        Replace stopwords by space
-        Default patterns:  ENGLISH_STOP_WORDS
+        Replace stopwords by whitespace
+        Default patterns:  ENGLISH_STOP_WORDS + custom stop words
         :param col                          an input column Series object
         :param stopwords                    a tuple of genre to replace
         """
+        logging.info("Removing stop words: {}".format(stopwords))
         col_copy = col.copy()
         col_copy = col_copy.str.split(" ")
-        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if word.strip() not in stopwords])
+        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if word.strip().lower() not in stopwords])
         col_copy = col_copy.str.join(" ")
         return col_copy
 
     @staticmethod
     @remove_spaces_and_strip
-    def remove_non_alphabetical_words(col):
+    def remove_non_alphanumeric_words(col):
         """
-        Replace words containing non-alphabetical symbols by space
+        Replace words containing non-alphabetical symbols by whitespace
         Default patterns:  ENGLISH_STOP_WORDS
         :param col                          an input column Series object
         :param stopwords                    a tuple of genre to replace
         """
         col_copy = col.copy()
         col_copy = col_copy.str.split(" ")
-        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if word.isalpha()])
+        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if re.sub('[/-]', '', word).isalnum()])
         col_copy = col_copy.str.join(" ")
         return col_copy
 
@@ -264,13 +271,60 @@ class PreprocessTransformation():
     @remove_spaces_and_strip
     def remove_one_letter_words(col):
         """
-        Replace words containing non-alphabetical symbols by space
-        Default patterns:  ENGLISH_STOP_WORDS
+        Remove single letter words
         :param col                          an input column Series object
-        :param stopwords                    a tuple of genre to replace
         """
         col_copy = col.copy()
         col_copy = col_copy.str.split(" ")
         col_copy = col_copy.apply(lambda row: [word.strip() for word in row if len(word) > 1])
         col_copy = col_copy.str.join(" ")
         return col_copy
+
+    @staticmethod
+    @remove_spaces_and_strip
+    def remove_one_letter_non_alphanumeric_words(col):
+        """
+        Remove single letter words
+        :param col                          an input column Series object
+        """
+        col_copy = col.copy()
+        col_copy = col_copy.str.split(" ")
+        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if len(word) > 1 or (len(word) == 1 and word.isalnum())])
+        col_copy = col_copy.str.join(" ")
+        return col_copy
+
+    @staticmethod
+    @remove_spaces_and_strip
+    def remove_verbs(col):
+        """
+        Remove words
+        :param col                          an input column Series object
+        """
+        col_copy = col.copy()
+        col_copy = col_copy.str.split(" ")
+        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if not (word in constants.VERBS and not word in constants.NOUNS)])
+        col_copy = col_copy.str.join(" ")
+        return col_copy
+
+    @staticmethod
+    @remove_spaces_and_strip
+    def remove_word_duplicates(col):
+        """
+        Remove words
+        :param col                          an input column Series object
+        """
+        col_copy = col.copy()
+        col_copy = col_copy.str.split(" ")
+        col_copy = col_copy.apply(lambda row: list(dict.fromkeys([word.strip() for word in row])))
+        col_copy = col_copy.str.join(" ")
+        return col_copy
+
+    @staticmethod
+    @remove_spaces_and_strip
+    def add_string_columns(col1, col2):
+        """
+        Remove words
+        :param col1, col2                    an input column Series objects
+        """
+        col = col1.replace(np.nan, '', regex=True) + " " + col2.replace(np.nan, '', regex=True)
+        return col
