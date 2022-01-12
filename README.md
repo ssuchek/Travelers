@@ -33,19 +33,19 @@ If no specific options provided during installation, virtual environment uses gl
 - Isolate virtual environment from global: unset global `PYTHONPATH`
 
     ```
-        ...
-        VIRTUAL_ENV='/Users/user/Documents/Pentatonic/Travelers/.venv'
-        if ([ "$OSTYPE" = "cygwin" ] || [ "$OSTYPE" = "msys" ]) && $(command -v cygpath &> /dev/null) ; then
-            VIRTUAL_ENV=$(cygpath -u "$VIRTUAL_ENV")
-        fi
-        export VIRTUAL_ENV
+    ...
+    VIRTUAL_ENV='/Users/user/Documents/Pentatonic/Travelers/.venv'
+    if ([ "$OSTYPE" = "cygwin" ] || [ "$OSTYPE" = "msys" ]) && $(command -v cygpath &> /dev/null) ; then
+        VIRTUAL_ENV=$(cygpath -u "$VIRTUAL_ENV")
+    fi
+    export VIRTUAL_ENV
 
-        unset PYTHONPATH
+    unset PYTHONPATH
 
-        _OLD_VIRTUAL_PATH="$PATH"
-        PATH="$VIRTUAL_ENV/bin:$PATH"
-        export PATH
-        ...
+    _OLD_VIRTUAL_PATH="$PATH"
+    PATH="$VIRTUAL_ENV/bin:$PATH"
+    export PATH
+    ...
     ```
 
 - Deactivate isolation during environment deactivation: add back `export PYTHONPATH` (`PYTHONPATH` depends on the Python version and OS)
@@ -70,19 +70,19 @@ deactivate
 To install a single Python package, use `pip` command from the `venv` Python executor:
 
 ```
-    .venv/bin/python -m pip install <package>
+.venv/bin/python -m pip install <package>
 ```
 
 or if packages are provided in configuration file `requirements.txt`:
 
 ```
-    .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 #### Run scripts in virtual environment
 
 ```
-    .venv/bin/python <script>
+.venv/bin/python <script>
 ```
 
 ### Deleting data files before installation
