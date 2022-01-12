@@ -1,38 +1,115 @@
 # Travelers
 
-This is a prototype of a Python module to process claim data from Travelers.
+Python module to process claim data from Travelers. Includes data cleansing, basic transformations, categorisation, weights matching.
 
 ## Quickstart
 
-Main running script is **categories.py**. Before run one need to install required Python packages using:
+First install required Python packages using:
 
-`pip install -r requirements.txt`
+```pip install -r requirements.txt```
 
-or using virtual environment
+or using virtual environment as described down below.
 
-`.venv/bin/python -m pip install -r requirements.txt`
+### Virtual environment
 
-**OPTIONAL**: to recreate all output files, delete them before running the scripts:
+#### Create virtual environment
+
+The following commands create virtual environment in `.venv` folder in the current folder for Python 3.8 and 3.9 respectively:
 
 ```
-if ls data/output/* &> /dev/null; then
-    rm data/output/*
-fi
+virtualenv .venv -p python3.8
+virtualenv .venv -p python3.9
+```
 
-if ls figs/* &> /dev/null; then
-    rm figs/*
+#### Activate, deactivate and manage virtual environment
+In order to activate virtual environment, use the following command:
+
+```
+source .venv/bin/activate
+```
+
+If no specific options provided during installation, virtual environment uses global Python packages on your machine. In order to isolate virtual environment from global, modify the activate script:
+
+- Isolate virtual environment from global: unset global `PYTHONPATH`
+
+    ```
+        ...
+        VIRTUAL_ENV='/Users/user/Documents/Pentatonic/Travelers/.venv'
+        if ([ "$OSTYPE" = "cygwin" ] || [ "$OSTYPE" = "msys" ]) && $(command -v cygpath &> /dev/null) ; then
+            VIRTUAL_ENV=$(cygpath -u "$VIRTUAL_ENV")
+        fi
+        export VIRTUAL_ENV
+
+        unset PYTHONPATH
+
+        _OLD_VIRTUAL_PATH="$PATH"
+        PATH="$VIRTUAL_ENV/bin:$PATH"
+        export PATH
+        ...
+    ```
+
+- Deactivate isolation during environment deactivation: add back `export PYTHONPATH` (`PYTHONPATH` depends on the Python version and OS)
+
+    ```
+    ...
+    deactivate () {
+        unset -f pydoc >/dev/null 2>&1 || true
+
+        export PYTHONPATH=$ROOTSYS/lib/python3.9/site-packages/:$PYTHONPATH
+    ...
+    ```
+
+Use `deactivate` command to deactivate virtual environment:
+
+```
+deactivate
+```
+
+#### Install packages inside venv
+
+To install a single Python package, use `pip` command from the `venv` Python executor:
+
+```
+    .venv/bin/python -m pip install <package>
+```
+
+or if packages are provided in configuration file `requirements.txt`:
+
+```
+    .venv/bin/python -m pip install -r requirements.txt
+```
+
+#### Run scripts in virtual environment
+
+```
+    .venv/bin/python <script>
+```
+
+### Deleting data files before installation
+
+Majority of output data files are NOT recreated when running Travelers module. 
+
+Check if certain file exists and delete it:
+
+```
+FILENAME="path_to_file"
+if [[ -f $FILENAME ]]; then
+    rm $FILENAME
 fi
 ```
 
-Finally, run the Python code:
+Check if multiple files exist and delete:
 
-`python categories.py`
+```
+FILES="<path_to_folder>/<pattern>"
+if ls $FILES* &> /dev/null; then
+    rm $FILES*
+fi
+```
 
-or using virtual environment
+### Running all together using BASH script
 
-`.venv/bin/python categories.py`
-
-Alternatevily run bash script to reproduce all steps at once:
+Alternatevily run bash script to run all steps of file deletion and script running at once:
 
 `source run.sh`
 
