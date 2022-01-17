@@ -49,6 +49,11 @@ STOP_CLAIMS = ["reset", "detach & reset", "detach and reset", "remove", "removal
             "clearance inspection", "landfil fees per tone", "debris disposal bid item", "mask cover"
             ]
 
+STOP_CLAIMS_ADDITIONAL = ["calibration", "rewire", "evaluate", "provide", "return", "re-skin", "barrier", "repair", "installer", "clean-out", 
+            "per week", "per day", "per month", "per invoice", "coating", "flashing"]
+
+
+
 STOP_SMALL_ITEM_CLAIMS = ["fabric softener", "knick knacks"]
 STOP_DONATED_REPURPOSED_CLAIMS = ["laptop cover", "camera bag", "artwork"]
 
@@ -62,7 +67,7 @@ SECONDARY_IGNORE_SUBCATEGORIES = [
     "steel components", "stucco", "wallpaper"
 ]
 
-ALL_STOP_CLAIMS = STOP_CLAIMS + STOP_SMALL_ITEM_CLAIMS + STOP_DONATED_REPURPOSED_CLAIMS + PRIMARY_IGNORE_SUBCATEGORIES + SECONDARY_IGNORE_SUBCATEGORIES
+ALL_STOP_CLAIMS = STOP_CLAIMS + STOP_CLAIMS_ADDITIONAL + STOP_SMALL_ITEM_CLAIMS + STOP_DONATED_REPURPOSED_CLAIMS + PRIMARY_IGNORE_SUBCATEGORIES + SECONDARY_IGNORE_SUBCATEGORIES
 
 FIELD_RENAME_MAP = {
     "Claim Identifier" : "claim_id",

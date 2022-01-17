@@ -209,7 +209,10 @@ class ClaimDataLoader(object):
     def preprocess_weights_db(self, weights_db_file, filename, data=None):
         logging.info("Start preprocessing weights DB")
         if data is None:
-            data = pd.read_csv(weights_db_file)
+            try:
+                data = pd.read_csv(weights_db_file)
+            except:
+                data = pd.read_csv(weights_db_file, delimiter=';', encoding='iso-8859-1')
 
             data = data[constants.WEIGHTS_DB_FIELDS]
 

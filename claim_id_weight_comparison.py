@@ -5,7 +5,7 @@ import pandas as pd
 
 import re
 
-data = pd.read_csv("/Users/user/Documents/Pentatonic/Travelers/data/output/revised/single_year/claims_weight_db_matched.csv")
+data = pd.read_csv("data/claims_weight_db_matched.csv")
 
 # Data for dumpster loads only
 truck_mask = (data["subcategory_prev"] == "GENERAL DEMOLITION") & data["item_description"].str.contains("DUMPSTER LOAD")
@@ -14,11 +14,18 @@ truck_data = data[truck_mask].copy()
 # Mask for items associated with valid pentatonic IDs
 id_matched_mask = data["pentatonic_id"].notna() & (data["pentatonic_id"] != "")
 
+data["weight_lbs"] = data["weight_lbs"].astype('str').str.replace(',', '.')
+data["weight_ustons"] = data["weight_ustons"].astype('str').str.replace(',', '.')
+data["volume_cf"] = data["volume_cf"].astype('str').str.replace(',', '.')
+data["volume_cy"] = data["volume_cy"].astype('str').str.replace(',', '.')
+data["count"] = data["count"].astype('str').str.replace(',', '.')
+
 # Estimated weight of claim items
-data["item_weight_lbs"] = data["weight_lbs"] * data["count"]
-data["item_weight_ustons"] = data["weight_ustons"] * data["count"]
-data["item_volume_cf"] = data["volume_cf"] * data["count"]
-data["item_volume_cy"] = data["volume_cy"] * data["count"]
+data["item_weight_lbs"] = data["weight_lbs"].astype('float') * data["count"].astype('float')
+data["item_weight_ustons"] = data["weight_ustons"].astype('float') * data["count"].astype('float')
+data["item_volume_cf"] = data["volume_cf"].astype('float') * data["count"].astype('float')
+data["item_volume_cy"] = data["volume_cy"].astype('float') * data["count"].astype('float')
+
 
 # Dumpster load items have patterns, e.g. "DUMPSTER LOAD APPROX 12 YARDS 1-3 TONS DEBRIS" or DUMPSTER LOAD APPROX 20 YARDS 4 TONS DEBRIS
 # In order to calculate weight for each truck, numbers before TONS are extracted
@@ -64,15 +71,18 @@ claim_id_data = data[~truck_mask].groupby(["claim_id"]).agg(
     matched_fraction=("item_weight_lbs", matching_fraction)
 )
 
+claim_id_data.to_csv(("data/output/count_temp_save.csv"))
+
 # Calculate difference between total truck weight and total estimated weight of claims in US tonnes
-claim_id_data["excessive_truck_weight"] = claim_id_data["total_truck_weight"] - claim_id_data["weight_estimation_ustons"]
+claim_id_data["excessive_truck_weight"] = claim_id_data["total_truck_weight"].astype('float') - claim_id_data["weight_estimation_ustons"].astype('float')
+claim_id_data["excessive_truck_weight_percentage"] = claim_id_data["excessive_truck_weight"]/claim_id_data["total_truck_weight"]*100
 
 # Saving data to Excel
-claim_id_data.to_excel(("/Users/user/Documents/Pentatonic/Travelers/data/output/revised/single_year/claim_id_weight_comparison.xlsx"))
+claim_id_data.to_excel(("data/output/count_claim_id_weight_comparison.xlsx"))
 
-plot = claim_id_data["excessive_truck_weight"].hist(bins=100, range=(-300, 300), grid=True)
+plot = claim_id_data["excessive_truck_weight_percentage"].hist(bins=100, range=(-500, 100), grid=True)
 
-plt.xlabel('(Total-estimated) truck weight in tons', fontsize=30)
+plt.xlabel('Deviation in Truck Weight Estimation (in percent)', fontsize=30)
 plt.ylabel('Frequency', fontsize=30)
 
 plt.xticks(fontsize=20)
@@ -81,8 +91,8 @@ plt.yticks(fontsize=20)
 fig = plt.gcf()
 fig.set_size_inches(18.5, 10.5, forward=True)
 
-plt.savefig('data/output/revised/single_year/excessive_truck_weight_frequency.png')
+plt.savefig('data/output/complete_percent_count_excessive_truck_weight_frequency.png')
 
 plt.yscale("log")
 
-plt.savefig('data/output/revised/single_year/excessive_truck_weight_frequency_logscale.png')
+plt.savefig('data/output/complete_percent_count_excessive_truck_weight_frequency_logscale.png')

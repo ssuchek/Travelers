@@ -37,9 +37,10 @@ log_initialize(
 
 def main():
 
-    raw_data_dir = config["data"]["raw_dir"]
-
-    claim_files = [os.path.join(raw_data_dir, f) for f in os.listdir(raw_data_dir) if os.path.isfile(os.path.join(raw_data_dir, f)) and "Xact_Categories" in f and f.endswith(".xlsx")]
+    #raw_data_dir = config["data"]["raw_dir"]
+    #claim_files = [os.path.join(raw_data_dir, f) for f in os.listdir(raw_data_dir) if os.path.isfile(os.path.join(raw_data_dir, f)) and "Xact_Categories" in f and f.endswith(".xlsx")]
+    raw_data_dir = 'C:/Users/Florian/projects/Travelers/data/raw/single_year'
+    claim_files = 'C:/Users/Florian/projects/Travelers/data/raw/single_year/Pentatonic_Xact_Categories_1yr_Final_1.xlsx', 'C:/Users/Florian/projects/Travelers/data/raw/single_year/Pentatonic_Xact_Categories_1yr_Final_2.xlsx'
 
     loader = ClaimDataLoader()
 
