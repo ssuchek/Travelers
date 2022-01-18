@@ -1,11 +1,14 @@
 import matplotlib.pyplot as plt
+from scipy.stats import norm, gaussian_kde
+
+from config import config
 
 import numpy as np
 import pandas as pd
 
 import re
 
-data = pd.read_csv("/Users/user/Documents/Pentatonic/Travelers/data/output/revised/single_year/claims_weight_db_matched.csv")
+data = pd.read_csv(config["data"]["claims_weights_matching"])
 
 # Data for dumpster loads only
 truck_mask = (data["subcategory_prev"] == "GENERAL DEMOLITION") & data["item_description"].str.contains("DUMPSTER LOAD")
@@ -70,19 +73,42 @@ claim_id_data["excessive_truck_weight"] = claim_id_data["total_truck_weight"] - 
 # Saving data to Excel
 claim_id_data.to_excel(("/Users/user/Documents/Pentatonic/Travelers/data/output/revised/single_year/claim_id_weight_comparison.xlsx"))
 
-plot = claim_id_data["excessive_truck_weight"].hist(bins=100, range=(-300, 300), grid=True)
+y = claim_id_data["excessive_truck_weight"].dropna()
 
-plt.xlabel('(Total-estimated) truck weight in tons', fontsize=30)
+bins = np.linspace(-400, 400, 401)
+hist = y.hist(bins=bins, density=True)
+
+mu, std = norm.fit(y)
+
+xbins = np.linspace(-400, 400, 40001)
+x = [0.5 * (xbins[i] + xbins[i+1]) for i in range(len(xbins)-1)]
+
+fit = norm.pdf(x, mu, std)
+plt.plot(x, fit, 'm-', linewidth=3, label=r'Gaussian fit $(\mu={:.2f},\sigma={:.2f})$'.format(mu, std))
+
+kde = gaussian_kde(y).pdf(x)
+plt.plot(x, kde, 'y-', linewidth=2, label='Gaussian kernel density estimation')
+
+plt.grid(True)
+
+plt.xlabel('Excessive truck weight in tons', fontsize=30)
 plt.ylabel('Frequency', fontsize=30)
 
 plt.xticks(fontsize=20)
 plt.yticks(fontsize=20)
 
+plt.legend(fontsize=20)
+
 fig = plt.gcf()
 fig.set_size_inches(18.5, 10.5, forward=True)
 
+plt.xlim(-100,100)
 plt.savefig('data/output/revised/single_year/excessive_truck_weight_frequency.png')
 
+bins = np.linspace(-400, 400, 401)
+hist = y.hist(bins=bins, density=True)
+
+plt.xlim(-400,400)
 plt.yscale("log")
 
 plt.savefig('data/output/revised/single_year/excessive_truck_weight_frequency_logscale.png')

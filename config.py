@@ -35,34 +35,42 @@ STOP_WORDS = stopwords.words("english")
 #                                             "period", "rfg",
 #                                             "a", "the", "an", "s", "to"]
 
-# STOP_CLAIMS = ["reset", "detach & reset", "detach and reset", "remove & reset", "remove and reset", "restore & repair", "restore and repair", 
-#             "move", "clean", "cleaning", "content manipulation", "cont", "tear", "repair", "installed", "block and pad furniture", 
-#             "furniture repair", "apperance allowance", "add", "fees", "labor", "fill in", "replace", "operator", "only labor",
-#             "bulgary", "robbery", "mysterious disappearance", "civil unrest", "paint"]
-
-STOP_CLAIMS = ["reset", "detach & reset", "detach and reset", "remove", "removal", "demolish/remove", "restore & repair", "restore and repair", 
-            "move", "clean", "cleaning", "content manipulation", "cont", "repair", "installed", "block and pad furniture", 
-            "furniture repair", "apperance allowance", "add", "labor", "fill in", "replace", "operator", "only labor",
-            "bulgary", "robbery", "mysterious disappearance", "civil unrest", "paint", "painting", "permits", "remediation", 
-            "treatment", "cont", "comp", "software", "tree", "dust control barrier per square foot", "floor protection heavy paper tape",
-            "charge", "re-charge", "recharge", "installation", "dust control barrier", "debris chute", "floor prot", "floor protection",
-            "clearance inspection", "landfil fees per tone", "debris disposal bid item", "mask cover"
+STOP_CLAIMS = [
+                "add", "appearance allowance",
+                "barrier", "block pad furniture"
+                "calibration", "charge", "civil unrest", "clean", "cleaning", "clean-out", "cleanout", "clearance inspection", "coating", "comp", "cont", "content manipulation",
+                "debris chute", "debris disposal bid item", "demolish/remove", "detach reset", "dust control barrier",
+                "fill in", "flashing", "floor prot", "floor protection", "furniture repair", 
+                "evaluate",
+                "installation", "installed", "installer",
+                "labor", "landfil fees",
+                "mask cover", "move",
+                "operator", 
+                "paint", "painting", "permits", "per day", "per invoice", "per month", "per week", "provide",
+                "re-charge", "recharge", "remediation", "remove", "removal", "repair", "replace", "reset", "re-skin", "reskin", "restore repair", "return", "rewire",
+                "software",
+                "treatment", "tree"
             ]
 
 STOP_SMALL_ITEM_CLAIMS = ["fabric softener", "knick knacks"]
 STOP_DONATED_REPURPOSED_CLAIMS = ["laptop cover", "camera bag", "artwork"]
 
-PRIMARY_IGNORE_SUBCATEGORIES = [
-    "cont", "fees", "excavation", "documents valuable papers", "firearms accessories", "health medical supplies",
-    "interior lath plaster", "cash securities", "awnings patio covers", "setup", "personal care beauty", "perishable non-perishable"
-]
-
-SECONDARY_IGNORE_SUBCATEGORIES = [
+STOP_CATEGORIES = [
+    "fees", "excavation", "documents valuable papers", "firearms accessories", "health medical supplies",
+    "interior lath plaster", "cash securities", "awnings patio covers", "setup", "personal care beauty", "perishable non-perishable",
     "finish hardware", "finish carpentry trimwork", "metal structure components", "misc equipment", "moisture protection",
     "steel components", "stucco", "wallpaper"
 ]
 
-ALL_STOP_CLAIMS = STOP_CLAIMS + STOP_SMALL_ITEM_CLAIMS + STOP_DONATED_REPURPOSED_CLAIMS + PRIMARY_IGNORE_SUBCATEGORIES + SECONDARY_IGNORE_SUBCATEGORIES
+STOP_REASON_DESC = [
+    "burglary", "mysterious disappearance", "robbery"
+]
+
+ALL_STOP_CLAIMS = STOP_CLAIMS + STOP_SMALL_ITEM_CLAIMS + STOP_DONATED_REPURPOSED_CLAIMS
+
+KEEP_ITEMS = [
+    "haul", "dispose"
+]
 
 FIELD_RENAME_MAP = {
     "Claim Identifier" : "claim_id",

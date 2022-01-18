@@ -78,11 +78,17 @@ def main():
 
     if os.path.exists(weights_db_file):
         weights_db = loader.preprocess_weights_db(weights_db_file=weights_db_file, filename=config["data"]["weights_preprocessed_db"])
-        claims_weights_matching = loader.match_weights_db(weights=weights_db, claims=claim_data, filename=config["data"]["claims_weights_matching"])
+        claims_weights_matching = loader.match_weights_db(weights=weights_db, claims=claim_data, weights_file=config["data"]["weights_db_matching"], filename=config["data"]["claims_weights_matching"])
         # loader.calculate_matched_match_weights_db(matched_claims=claims_weights_matching, primary_desc=primary_desc, categories=list(category_map), filename=config["data"]["claims_weights_matching_stats"])
     else:
         log_and_warn("No weights DB found!")
         weights_db = None
+
+    
+    
+    # Word frequency analysis in claim description
+    #     word_frequency_data = loader.most_frequent_words(region_claim_data, config["data"]["word_frequency"].format(region=region, extension="xlsx"))
+    #     loader.plot_most_frequent_words(word_frequency_data, config["figures"]["word_frequency"].format(region=region))
 
     # Analyze claims data based on different regions
     # primary_regions = ["Texas", "Austin", "Dallas", "Houston", "Other"]

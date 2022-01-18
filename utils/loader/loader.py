@@ -1,4 +1,5 @@
 import collections
+from distutils.log import error
 import ijson
 import itertools
 import json
@@ -22,7 +23,7 @@ import config as constants
 from config import config
 
 from utils.preprocess import Preprocessor, PreprocessTransformation
-from utils.preprocess import BASIC_PREPROCESS, BASIC_WORD_PREPROCESS
+from utils.preprocess import BASIC_PREPROCESS, CATEGORIES_WORD_PREPROCESS
 from utils.preprocess import WEIGHTS_PREPROCESS, WEIGHTS_WORD_PREPROCESS
 from utils.preprocess.dataframe import aggregate_col_values_to_comma_list
 
@@ -167,39 +168,119 @@ class ClaimDataLoader(object):
         if data is None:
             data = claims.copy()
 
-            logging.info("Start basic preprocessing")
+            logging.info("Basic data preprocessing...")
             basic_preprocessor = Preprocessor(BASIC_PREPROCESS)
             data = basic_preprocessor.calculate(data)
 
-            logging.info("Removing unnecessary claims")
-            #stop_claims = "|".join([format_and_regex(p) for p in constants.ALL_STOP_CLAIMS])
+            logging.info("Word preprocessing...")
+            word_preprocessor = Preprocessor(CATEGORIES_WORD_PREPROCESS)
+            data = word_preprocessor.calculate(data)
 
             total_claims_start = data.shape[0]
+
+            regex_keep_claims = ";".join(constants.KEEP_ITEMS)
+
+            regex_keep_claims_expr = format_and_regex(regex_keep_claims)
 
             for stop_claim in constants.ALL_STOP_CLAIMS:
                 logging.info("Processing stop claim {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim)
 
-                stop_claims_mask = data["subcategory_prev"].astype(str).str.contains(regex_stop_claims_expr, flags=re.IGNORECASE,
-                                                                                    regex=True) | data[
-                                    "item_description"].astype(str).str.contains(regex_stop_claims_expr, flags=re.IGNORECASE,
-                                                                                    regex=True)
+                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
 
-                if stop_claims_mask.sum() > 0:
-                    log_and_warn(
+                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+
+                
+                log_and_warn(
                         "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
                                                                                         data.shape[0],
                                                                                         stop_claim
                                                                                     ))
+
+                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)   
+
+                stop_claims_mask &= ~keep_mask                                                                                                                     
+                if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
 
+            for stop_claim in constants.STOP_CATEGORIES:
+                logging.info("Processing stop category {}...".format(stop_claim))
+
+                regex_stop_claims_expr = format_and_regex(stop_claim)
+
+                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+
+                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+
+                log_and_warn(
+                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                                                                        data.shape[0],
+                                                                                        stop_claim
+                                                                                    ))
+
+                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)        
+                stop_claims_mask &= ~keep_mask                                                                                                                     
+                if stop_claims_mask.sum() > 0:
+                    data = data[~stop_claims_mask]
+
+            for stop_claim in constants.STOP_REASON_DESC:
+                logging.info("Processing stop category {}...".format(stop_claim))
+
+                regex_stop_claims_expr = format_and_regex(stop_claim)
+
+                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+
+                stop_claims_mask = data["primary_col_desc"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+
+                log_and_warn(
+                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                                                                        data.shape[0],
+                                                                                        stop_claim
+                                                                                    ))
+
+                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)        
+                stop_claims_mask &= ~keep_mask                                                                                                                     
+                if stop_claims_mask.sum() > 0:
+                    data = data[~stop_claims_mask]    
+
             log_and_warn(
-                        "Total {}/{} claims are filtered out according to ALL_STOP_CLAIMS".format(total_claims_start-data.shape[0],
-                                                                                        data.shape[0]
+                        "Total {}/{} claims are filtered out according to stop categories and claims".format(total_claims_start-data.shape[0],
+                                                                                        total_claims_start
                                                                                     ))
 
             data = self.match_zip_codes(data)
+
+            drop_columns = [col for col in data.columns if col.endswith("_processed")]
+            if drop_columns:
+                data = data.drop(columns=drop_columns)
 
             self.save_data_to_csv(data, filename, index=False)
 
@@ -221,7 +302,7 @@ class ClaimDataLoader(object):
 
         return data
 
-    def most_frequent_words(self, data, filename, transformations=BASIC_WORD_PREPROCESS):
+    def most_frequent_words(self, data, filename, column, transformations=CATEGORIES_WORD_PREPROCESS):
 
         claims = data.copy()
 
@@ -229,9 +310,9 @@ class ClaimDataLoader(object):
             frequency_preprocessor = Preprocessor(transformations)
             claims = frequency_preprocessor.calculate(claims)
 
-        claims["item_description"] = claims["item_description"].astype(str).str.split()
+        claims[column] = claims[column].astype(str).str.split()
 
-        nested_item_list = claims["item_description"].values.tolist()
+        nested_item_list = claims[column].values.tolist()
 
         item_list = list(itertools.chain.from_iterable(nested_item_list))
 
@@ -243,6 +324,8 @@ class ClaimDataLoader(object):
 
         most_frequent_words = pd.DataFrame(words.most_common(total_words),
                                            columns=['words', 'count'])
+
+        filename = column + "_" + filename
 
         self.save_data_to_csv(most_frequent_words, filename.format(extension="csv"), index=False)
         self.save_data_to_excel(most_frequent_words, filename.format(extension="xlsx"), index=False)
@@ -283,7 +366,7 @@ class ClaimDataLoader(object):
         :param tag_col:         name of the tag column
         :param tag:             an input tag to incorporate in tag column
         """
-        tag_mask = data[tag_col].fillna("").str.contains(tag + ",") | data[tag_col].fillna("").str.contains(
+        tag_mask = data[tag_col].fillna("").astype(str).str.contains(tag + ",") | data[tag_col].fillna("").astype(str).str.contains(
             "," + tag) | (data[tag_col] == tag)
         log_and_warn("{}/{} items are previously tagged as {}: no need to retag".format((mask & tag_mask).sum(),
                                                                                         data.shape[0],
@@ -336,10 +419,14 @@ class ClaimDataLoader(object):
         if data is None:
             data = claims.copy()
 
+            logging.info("Word preprocessing...")
+            word_preprocessor = Preprocessor(CATEGORIES_WORD_PREPROCESS)
+            data = word_preprocessor.calculate(data)
+
             data["category"] = ""
             data["subcategory"] = ""
 
-            item_desc = data["item_description"].dropna().unique().tolist()
+            item_desc = data["item_description_processed"].dropna().unique().tolist()
             total_item_desc = len(item_desc)
 
             if total_item_desc > 0:
@@ -348,7 +435,7 @@ class ClaimDataLoader(object):
                 logging.error("Found no item descriptions in claims DB!".format(total_item_desc))
                 raise Exception("Weights DB matching failed due to item descriptions not found in claims DB. Check your claim data")
 
-            subcategory_desc = data["subcategory_prev"].dropna().unique().tolist()
+            subcategory_desc = data["subcategory_prev_processed"].dropna().unique().tolist()
             total_subcategory_desc = len(subcategory_desc)
 
             if total_subcategory_desc > 0:
@@ -363,24 +450,24 @@ class ClaimDataLoader(object):
                     logging.info("Processing subcategory {}...".format(subcategory))
                     logging.info("Search patterns: {}".format(patterns))
 
-                    patterns_regex_list = list(dict.fromkeys([format_and_regex(p, permutations=True, is_synonyms=False) for p in patterns]))
+                    matched_item_desc = []
+                    matched_subcategory_desc = []
 
-                    compiled_regex_desc = re.compile("|".join(patterns_regex_list))
+                    for pattern in patterns:
 
-                    logging.info("Regex pattern: {}".format(compiled_regex_desc))
+                        compiled_regex_desc = re.compile(format_and_regex(pattern, permutations=True, is_synonyms=False))
 
-                    matched_item_desc = list(filter(compiled_regex_desc.match, item_desc))
-                    total_matched_item_desc = len(matched_item_desc)
+                        logging.info("Regex pattern: {}".format(compiled_regex_desc))
 
-                    if total_matched_item_desc > 0:
-                        regex_mask = data["item_description"].isin(matched_item_desc)
-                        data = self.add_tag(data, regex_mask, "subcategory", subcategory)
+                        matched_item_desc.extend(list(filter(compiled_regex_desc.match, item_desc)))
+                        matched_subcategory_desc.extend(list(filter(compiled_regex_desc.match, subcategory_desc)))
 
-                    matched_subcategory_desc = list(filter(compiled_regex_desc.match, subcategory_desc))
+                    total_matched_item_desc = len(matched_item_desc)    
                     total_matched_subcategory_desc = len(matched_item_desc)
                         
-                    if total_matched_subcategory_desc > 0:
-                        regex_mask = data["subcategory_prev"].isin(matched_subcategory_desc)
+                    if total_matched_item_desc > 0 or total_matched_subcategory_desc > 0:
+                        regex_mask = data["subcategory_prev_processed"].isin(matched_subcategory_desc) | \
+                                    data["item_description_processed"].isin(matched_item_desc)
                         data = self.add_tag(data, regex_mask, "subcategory", subcategory)
 
                     subcategory_mask = data["subcategory"].astype(str).str.contains(subcategory, flags=re.IGNORECASE, regex=True)
@@ -397,6 +484,11 @@ class ClaimDataLoader(object):
                                                                               data.shape[0],
                                                                               category
                                                                               ))
+
+            drop_columns = [col for col in data.columns if col.endswith("_processed")]
+            if drop_columns:
+                data = data.drop(columns=drop_columns)
+
             self.save_data_to_csv(data, filename, index=False)
 
         return data
@@ -596,7 +688,7 @@ class ClaimDataLoader(object):
         return data
 
     @read_if_exist_decorator
-    def match_weights_db(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=BASIC_WORD_PREPROCESS):
+    def match_weights_db(self, weights, claims, weights_file, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=CATEGORIES_WORD_PREPROCESS):
 
         if weights is None:
             log_and_warn("No weights DB is found")
@@ -606,9 +698,11 @@ class ClaimDataLoader(object):
             word_preprocessor = Preprocessor(weight_transformations)
             weights = word_preprocessor.calculate(weights)
 
-        weight_descriptions = weights[["primary_desc", "secondary_desc", "material", "dimensions", "values_desc"]].to_dict('records')
+        weight_descriptions = weights[["primary_desc_processed", "secondary_desc_processed", "material_processed", "dimensions_processed", "values_desc_processed"]].to_dict('records')
 
-        max_weight_per_primary_desc = weights.loc[weights.groupby("primary_desc")["weight_lbs"].idxmax()].reset_index(drop=True)
+        weights[["primary_matching", "full_matching"]] = False
+
+        # max_weight_per_primary_desc = weights.loc[weights.groupby("primary_desc")["weight_lbs"].idxmax()].reset_index(drop=True)
 
         if data is None:
             data = claims.copy()
@@ -618,15 +712,17 @@ class ClaimDataLoader(object):
                 data = word_preprocessor.calculate(data)
 
             unit_columns = ["weight_lbs", "weight_ustons", "volume_cf", "volume_cy"]
-            max_unit_columns = ["max_"+col for col in unit_columns]
+            # max_unit_columns = ["max_"+col for col in unit_columns]
 
-            all_unit_columns = unit_columns + max_unit_columns
+            # all_unit_columns = unit_columns + max_unit_columns
 
-            data[["pentatonic_id", "weights_primary_desc", "unit", "max_unit"]] = ""
-            data[all_unit_columns] = 0
+            data[["pentatonic_id", "weights_primary_desc", "unit"]] = ""
+            #data[["pentatonic_id", "weights_primary_desc", "unit", "max_unit", "weights_unit"]] = ""
+            # data[all_unit_columns] = 0
+            data[unit_columns] = 0
 
             unit_columns = unit_columns + ["unit"]
-            max_unit_columns = max_unit_columns + ["max_unit"]
+            # max_unit_columns = max_unit_columns + ["max_unit"]
 
             total_full_desc = len(weight_descriptions)
 
@@ -636,11 +732,8 @@ class ClaimDataLoader(object):
                 logging.warning("Found no valid compound descriptions in weights DB. Exiting...".format(total_full_desc))
                 return data
 
-            item_desc = data["item_description"].unique().tolist()
-            category_desc = data["subcategory_prev"].unique().tolist()
-
-            item_desc = [item for item in item_desc if item == item]
-            category_desc = [category for category in category_desc if category == category]
+            item_desc = data["item_description_processed"].dropna().unique().tolist()
+            category_desc = data["subcategory_prev_processed"].dropna().unique().tolist()
 
             total_item_desc = len(item_desc)
             if total_item_desc > 0:
@@ -705,26 +798,28 @@ class ClaimDataLoader(object):
                                                                                                 desc[key]
                                                                                                     ))
 
-                        if key == "primary_desc" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
-                            regex_mask = (data["item_description"].isin(matched_item_desc) | data["subcategory_prev"].isin(matched_category_desc))
+                        if key == "primary_desc_processed" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
+                            weights.loc[matched_mask, "primary_matching"] = True
+
+                            regex_mask = (data["item_description_processed"].isin(matched_item_desc) | data["subcategory_prev_processed"].isin(matched_category_desc))
                             data = self.add_tag(data, regex_mask, "weights_primary_desc", desc[key])
 
-                            primary_mask = (max_weight_per_primary_desc["primary_desc"] == desc[key])
-                            weight_lbs = max_weight_per_primary_desc.loc[primary_mask, "weight_lbs"].iloc[0]
+                            # primary_mask = (max_weight_per_primary_desc["primary_desc"] == desc[key])
+                            # weight_lbs = max_weight_per_primary_desc.loc[primary_mask, "weight_lbs"].iloc[0]
 
-                            replace_mask = regex_mask & (data["max_weight_lbs"] < weight_lbs)
+                            # replace_mask = regex_mask & (data["max_weight_lbs"] < weight_lbs)
 
-                            if replace_mask.sum() > 0:
-                                logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
-                                    desc[key],
-                                    replace_mask.sum(),
-                                    regex_mask.sum(),
-                                    weight_lbs
-                                ))
+                            # if replace_mask.sum() > 0:
+                            #     logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
+                            #         desc[key],
+                            #         replace_mask.sum(),
+                            #         regex_mask.sum(),
+                            #         weight_lbs
+                            #     ))
 
-                                for col in max_unit_columns:
-                                    unit = max_weight_per_primary_desc.loc[primary_mask, col.replace("max_","")].iloc[0]
-                                    data = self.replace_tag(data, replace_mask, col, unit)
+                            #     for col in max_unit_columns:
+                            #         unit = max_weight_per_primary_desc.loc[primary_mask, col.replace("max_","")].iloc[0]
+                            #         data = self.replace_tag(data, replace_mask, col, unit)
 
                 total_matched_items = 0
                 total_matched_item_desc = len(matched_item_desc)
@@ -734,8 +829,9 @@ class ClaimDataLoader(object):
                 valid_category_matching = (total_matched_category_desc > 0 and total_matched_category_desc < total_category_desc)
 
                 if valid_item_matching or valid_category_matching:
+                    weights.loc[matched_mask, "full_matching"] = True
 
-                    regex_mask = (data["item_description"].isin(matched_item_desc) | data["subcategory_prev"].isin(matched_category_desc))
+                    regex_mask = (data["item_description_processed"].isin(matched_item_desc) | data["subcategory_prev_processed"].isin(matched_category_desc))
                     total_matched_items = regex_mask.sum()
 
                     pentatonic_id = weights.loc[matched_mask, "pentatonic_id"].iloc[0]
@@ -769,26 +865,59 @@ class ClaimDataLoader(object):
                             desc[key]
                         ))
 
-
-            id_unmatched_mask = (data["pentatonic_id"].isna() | (data["pentatonic_id"] == ""))
+            id_matched_mask = (data["pentatonic_id"].notna() & (data["pentatonic_id"] != ""))
             primary_matched_mask = (data["weights_primary_desc"].notna() & (data["weights_primary_desc"] != ""))
-            valid_weights = (data["max_weight_lbs"].notna() & (data["max_weight_lbs"] > 0))
-
-            only_primary_matched_mask = id_unmatched_mask & primary_matched_mask & valid_weights
+            only_primary_matched_mask = ~id_matched_mask & primary_matched_mask
 
             if only_primary_matched_mask.sum() > 0:
                 log_and_warn(
-                        "Total {}/{} claims were matched by primary description but not Pentatonic ID. Replacing weights with non-zero max weight per primary desc ...".format(
+                        "Total {}/{} claims were matched by primary description but not Pentatonic ID...".format(
                                                                                                 only_primary_matched_mask.sum(),
                                                                                                 data.shape[0]
                         ))
-                for col in unit_columns:
-                    data.loc[only_primary_matched_mask, col] = data.loc[only_primary_matched_mask, "max_"+col]
 
-            data[all_unit_columns] = data[all_unit_columns].fillna(0)
+            if id_matched_mask.sum() > 0:
+                log_and_warn(
+                        "Total {}/{} claims were matched by Pentatonic ID...".format(
+                                                                                                id_matched_mask.sum(),
+                                                                                                data.shape[0]
+                        ))
+
+            # id_unmatched_mask = (data["pentatonic_id"].isna() | (data["pentatonic_id"] == ""))
+            # primary_matched_mask = (data["weights_primary_desc"].notna() & (data["weights_primary_desc"] != ""))
+            # valid_weights = (data["max_weight_lbs"].notna() & (data["max_weight_lbs"] > 0))
+
+            # only_primary_matched_mask = id_unmatched_mask & primary_matched_mask & valid_weights
+
+            # if only_primary_matched_mask.sum() > 0:
+            #     log_and_warn(
+            #             "Total {}/{} claims were matched by primary description but not Pentatonic ID. Replacing weights with non-zero max weight per primary desc ...".format(
+            #                                                                                     only_primary_matched_mask.sum(),
+            #                                                                                     data.shape[0]
+            #             ))
+            #     for col in unit_columns:
+            #         data.loc[only_primary_matched_mask, col] = data.loc[only_primary_matched_mask, "max_"+col]
+
+            data["unit_matching"] = "undefined"
+            valid_unit_mask = (data["unit"].notna() & (data["unit"] != ""))
+            unit_matching_mask = (data["unit"] == data["item_unit_cd"])
+            data.loc[unit_matching_mask & valid_unit_mask, "unit_matching"] = "yes"
+            data.loc[~unit_matching_mask & valid_unit_mask, "unit_matching"] = "no"
+
+            drop_columns = [col for col in data.columns if col.endswith("_processed")]
+            if drop_columns:
+                data = data.drop(columns=drop_columns)
 
             self.save_data_to_csv(data, filename, index=False)
             self.save_data_to_excel(data, filename.replace(".csv", ".xlsx"), index=False)
+
+            drop_columns = [col for col in weights.columns if col.endswith("_processed")]
+            if drop_columns:
+                weights = weights.drop(columns=drop_columns)
+
+            self.save_data_to_csv(weights, weights_file, index=False)
+            self.save_data_to_excel(weights, weights_file.replace(".csv", ".xlsx"), index=False)
+
 
         return data
 
