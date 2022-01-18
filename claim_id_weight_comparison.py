@@ -5,7 +5,7 @@ import pandas as pd
 
 import re
 
-data = pd.read_csv("data/claims_weight_db_matched.csv")
+data = pd.read_csv("data/output/revised/single_year/0118_1718_claims_weight_db_matched.csv")
 
 # Data for dumpster loads only
 truck_mask = (data["subcategory_prev"] == "GENERAL DEMOLITION") & data["item_description"].str.contains("DUMPSTER LOAD")
@@ -18,13 +18,13 @@ data["weight_lbs"] = data["weight_lbs"].astype('str').str.replace(',', '.')
 data["weight_ustons"] = data["weight_ustons"].astype('str').str.replace(',', '.')
 data["volume_cf"] = data["volume_cf"].astype('str').str.replace(',', '.')
 data["volume_cy"] = data["volume_cy"].astype('str').str.replace(',', '.')
-data["count"] = data["count"].astype('str').str.replace(',', '.')
+data["item_quantity"] = data["item_quantity"].astype('str').str.replace(',', '.')
 
 # Estimated weight of claim items
-data["item_weight_lbs"] = data["weight_lbs"].astype('float') * data["count"].astype('float')
-data["item_weight_ustons"] = data["weight_ustons"].astype('float') * data["count"].astype('float')
-data["item_volume_cf"] = data["volume_cf"].astype('float') * data["count"].astype('float')
-data["item_volume_cy"] = data["volume_cy"].astype('float') * data["count"].astype('float')
+data["item_weight_lbs"] = data["weight_lbs"].astype('float') * data["item_quantity"].astype('float')
+data["item_weight_ustons"] = data["weight_ustons"].astype('float') * data["item_quantity"].astype('float')
+data["item_volume_cf"] = data["volume_cf"].astype('float') * data["item_quantity"].astype('float')
+data["item_volume_cy"] = data["volume_cy"].astype('float') * data["item_quantity"].astype('float')
 
 
 # Dumpster load items have patterns, e.g. "DUMPSTER LOAD APPROX 12 YARDS 1-3 TONS DEBRIS" or DUMPSTER LOAD APPROX 20 YARDS 4 TONS DEBRIS
@@ -43,7 +43,7 @@ truck_data.loc[range_mask, ["lower_truck_weight", "upper_truck_weight"]] = truck
 truck_data.loc[precise_mask, "lower_truck_weight"] = truck_data.loc[precise_mask, "upper_truck_weight"] = truck_data.loc[precise_mask, "item_description"].str.extract(r'\s+(\d)\s+TONS', flags=re.IGNORECASE).values
 
 # Calculate average weight for each truck and mulptiply by number of trucks
-truck_data["average_truck_weight"] = 0.5*(truck_data["lower_truck_weight"].astype(float) + truck_data["upper_truck_weight"].astype(float))*truck_data["count"]
+truck_data["average_truck_weight"] = 0.5*(truck_data["lower_truck_weight"].astype(float) + truck_data["upper_truck_weight"].astype(float))*truck_data["item_quantity"]
 
 # Total weight of all trucks per claim ID
 truck_weight_data = truck_data.groupby("claim_id").agg(total_truck_weight=("average_truck_weight", "sum")).reset_index()
@@ -61,7 +61,7 @@ def matching_fraction(col):
 # Aggregate claim data for each claim ID
 claim_id_data = data[~truck_mask].groupby(["claim_id"]).agg(
     total_claims=("item_description", "count"),
-    total_items=("count", "sum"),
+    total_items=("item_quantity", "sum"), #changed from item_quantity to count
     total_truck_weight=("total_truck_weight", "last"),
     weight_estimation_lbs=("item_weight_lbs", "sum"),
     weight_estimation_ustons=("item_weight_ustons", "sum"),
@@ -76,11 +76,13 @@ claim_id_data.to_csv(("data/output/count_temp_save.csv"))
 # Calculate difference between total truck weight and total estimated weight of claims in US tonnes
 claim_id_data["excessive_truck_weight"] = claim_id_data["total_truck_weight"].astype('float') - claim_id_data["weight_estimation_ustons"].astype('float')
 claim_id_data["excessive_truck_weight_percentage"] = claim_id_data["excessive_truck_weight"]/claim_id_data["total_truck_weight"]*100
+claim_id_data["abs_excessive_truck_weight_percentage"] = claim_id_data["excessive_truck_weight_percentage"].abs()
+average_deviation = claim_id_data["abs_excessive_truck_weight_percentage"].mean()
 
 # Saving data to Excel
-claim_id_data.to_excel(("data/output/count_claim_id_weight_comparison.xlsx"))
+claim_id_data.to_excel(("data/output/0118_claim_id_weight_comparison.xlsx"))
 
-plot = claim_id_data["excessive_truck_weight_percentage"].hist(bins=100, range=(-500, 100), grid=True)
+plot = claim_id_data["excessive_truck_weight_percentage"].hist(bins=100, range=(-100, 100), grid=True)
 
 plt.xlabel('Deviation in Truck Weight Estimation (in percent)', fontsize=30)
 plt.ylabel('Frequency', fontsize=30)
@@ -91,8 +93,12 @@ plt.yticks(fontsize=20)
 fig = plt.gcf()
 fig.set_size_inches(18.5, 10.5, forward=True)
 
-plt.savefig('data/output/complete_percent_count_excessive_truck_weight_frequency.png')
+plt.savefig('data/output/0118_complete_percent_count_excessive_truck_weight_frequency.png')
 
 plt.yscale("log")
 
-plt.savefig('data/output/complete_percent_count_excessive_truck_weight_frequency_logscale.png')
+plt.savefig('data/output/0118_complete_percent_count_excessive_truck_weight_frequency_logscale.png')
+
+lines = ['Overall Average Deviation: ' + str(average_deviation)]
+with open('data/output/metrics.txt', 'w') as f:
+    f.writelines(lines)

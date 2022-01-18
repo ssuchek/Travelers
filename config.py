@@ -49,8 +49,9 @@ STOP_CLAIMS = ["reset", "detach & reset", "detach and reset", "remove", "removal
             "clearance inspection", "landfil fees per tone", "debris disposal bid item", "mask cover"
             ]
 
+# added as per request 17.01.2021
 STOP_CLAIMS_ADDITIONAL = ["calibration", "rewire", "evaluate", "provide", "return", "re-skin", "barrier", "repair", "installer", "clean-out", 
-            "per week", "per day", "per month", "per invoice", "coating", "flashing"]
+            "per week", "per day", "per month", "per invoice", "coating", "flashing"] 
 
 
 

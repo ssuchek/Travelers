@@ -78,7 +78,9 @@ def main():
     weights_db_file = config["data"]["weights_db"]
 
     if os.path.exists(weights_db_file):
+        #isolate the step below to look into preprocessing step
         weights_db = loader.preprocess_weights_db(weights_db_file=weights_db_file, filename=config["data"]["weights_preprocessed_db"])
+        #check the line below for the matching
         claims_weights_matching = loader.match_weights_db(weights=weights_db, claims=claim_data, filename=config["data"]["claims_weights_matching"])
         # loader.calculate_matched_match_weights_db(matched_claims=claims_weights_matching, primary_desc=primary_desc, categories=list(category_map), filename=config["data"]["claims_weights_matching_stats"])
     else:

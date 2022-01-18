@@ -212,6 +212,7 @@ class ClaimDataLoader(object):
             try:
                 data = pd.read_csv(weights_db_file)
             except:
+                # to make sure we can read the excel-generated csv export as well
                 data = pd.read_csv(weights_db_file, delimiter=';', encoding='iso-8859-1')
 
             data = data[constants.WEIGHTS_DB_FIELDS]
@@ -598,9 +599,10 @@ class ClaimDataLoader(object):
 
         return data
 
-    @read_if_exist_decorator
-    def match_weights_db(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=BASIC_WORD_PREPROCESS):
 
+    @read_if_exist_decorator
+    def match_weights_db_2(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=None):
+        
         if weights is None:
             log_and_warn("No weights DB is found")
             return claims
@@ -611,9 +613,11 @@ class ClaimDataLoader(object):
 
         weight_descriptions = weights[["primary_desc", "secondary_desc", "material", "dimensions", "values_desc"]].to_dict('records')
 
+        weights[["matched_primary", "matched_secondary"]] = 0
+
         max_weight_per_primary_desc = weights.loc[weights.groupby("primary_desc")["weight_lbs"].idxmax()].reset_index(drop=True)
 
-        if data is None:
+        if True:
             data = claims.copy()
 
             if transformations:
@@ -625,7 +629,7 @@ class ClaimDataLoader(object):
 
             all_unit_columns = unit_columns + max_unit_columns
 
-            data[["pentatonic_id", "weights_primary_desc", "unit", "max_unit"]] = ""
+            data[["pentatonic_id", "weights_primary_desc", "unit", "max_unit", "weights_unit", "weights_secondary_desc", "weights_material", "weights_dimensions", "weights_values_desc"]] = ""
             data[all_unit_columns] = 0
 
             unit_columns = unit_columns + ["unit"]
@@ -639,9 +643,10 @@ class ClaimDataLoader(object):
                 logging.warning("Found no valid compound descriptions in weights DB. Exiting...".format(total_full_desc))
                 return data
 
-            item_desc = data["item_description"].unique().tolist()
-            category_desc = data["subcategory_prev"].unique().tolist()
+            item_desc = data["item_description"].unique().tolist() #all unique descriptions from the claims
+            category_desc = data["subcategory_prev"].unique().tolist() # all unique categories from the claims
 
+            #check for NaN values
             item_desc = [item for item in item_desc if item == item]
             category_desc = [category for category in category_desc if category == category]
 
@@ -693,7 +698,7 @@ class ClaimDataLoader(object):
                             if len(matched_item_desc) == 0 and len(matched_category_desc) == 0:
                                 break
 
-                        matched_mask &= (weights[key] == desc[key])
+                        matched_mask &= (weights[key] == desc[key]) #mask keeps track of matches that happen
 
                         log_and_warn(
                         "Total {}/{} claim descriptions are matched with {} {} from weights DB".format(len(matched_item_desc),
@@ -709,6 +714,9 @@ class ClaimDataLoader(object):
                                                                                                     ))
 
                         if key == "primary_desc" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
+                            primary_mask = (weights["primary_desc"] == key)
+                            weights.loc[primary_mask, "matched_primary"] = 1
+
                             regex_mask = (data["item_description"].isin(matched_item_desc) | data["subcategory_prev"].isin(matched_category_desc))
                             data = self.add_tag(data, regex_mask, "weights_primary_desc", desc[key])
 
@@ -729,6 +737,10 @@ class ClaimDataLoader(object):
                                     unit = max_weight_per_primary_desc.loc[primary_mask, col.replace("max_","")].iloc[0]
                                     data = self.replace_tag(data, replace_mask, col, unit)
 
+                        if key == "secondary_desc" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
+                            secondary_mask = (weights["secondary_desc"] == key)
+                            weights.loc[secondary_mask, "matched_secondary"] = 1
+
                 total_matched_items = 0
                 total_matched_item_desc = len(matched_item_desc)
                 total_matched_category_desc = len(matched_category_desc)
@@ -741,10 +753,24 @@ class ClaimDataLoader(object):
                     regex_mask = (data["item_description"].isin(matched_item_desc) | data["subcategory_prev"].isin(matched_category_desc))
                     total_matched_items = regex_mask.sum()
 
+                    #florian - added for the secondary col --> not working yet
+                    sec_desc = weights.loc[matched_mask, "secondary_desc"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_secondary_desc", sec_desc) 
+                    weights_material = weights.loc[matched_mask, "material"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_material", weights_material)
+                    weights_dimensions = weights.loc[matched_mask, "dimensions"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_dimensions", weights_dimensions)
+                    weights_values_desc = weights.loc[matched_mask, "values_desc"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_values_desc", weights_values_desc)
+                    #florian - end
+
                     pentatonic_id = weights.loc[matched_mask, "pentatonic_id"].iloc[0]
+
+                    weight_unit = weights.loc[matched_mask, "unit"].iloc[0]
 
                     if pentatonic_id:
                         data = self.add_tag(data, regex_mask, "pentatonic_id", pentatonic_id)
+                        data = self.add_tag(data, regex_mask, "weights_unit", weight_unit)
 
                         weight_lbs = weights.loc[matched_mask, "weight_lbs"].iloc[0]
 
@@ -790,8 +816,251 @@ class ClaimDataLoader(object):
 
             data[all_unit_columns] = data[all_unit_columns].fillna(0)
 
+            data["unit_matching"] = -1
+            valid_unit_weight_mask = (data["weights_unit"].notna() & (data["weights_unit"] != ""))
+            unit_matching_mask = (data["item_unit_cd"] == data["weights_unit"])
+            data.loc[unit_matching_mask & valid_unit_weight_mask, "unit_matching"] = 1
+            data.loc[~unit_matching_mask & valid_unit_weight_mask, "unit_matching"] = 0
+
+            #create a version that compares units correctly
+            data2 = data.copy()
+            mask_1 = data2['unit_matching'] == -1
+            mask_2 = data2['unit_matching'] == 0
+            data2.loc[mask_1 | mask_2, 'weight_lbs'] = 0
+            data2.loc[mask_1 | mask_2, 'weight_ustons'] = 0
+            data2.loc[mask_1 | mask_2, 'volume_cf'] = 0
+            data2.loc[mask_1 | mask_2, 'volume_cy'] = 0
+            data2.loc[mask_1 | mask_2, 'max_weight_lbs'] = 0
+            data2.loc[mask_1 | mask_2, 'max_weight_ustons'] = 0
+            data2.loc[mask_1 | mask_2, 'max_volume_cf'] = 0
+            data2.loc[mask_1 | mask_2, 'max_volume_cy'] = 0
+            filename_2 = 'C:/Users/Florian/projects/Travelers/data/output/revised/single_year/without_unitsfixed.csv'
+
+            self.save_data_to_csv(data2, filename, index=False)
+            self.save_data_to_csv(data, filename_2, index=False)
+            self.save_data_to_excel(data2, filename.replace(".csv", ".xlsx"), index=False)
+
+    @read_if_exist_decorator
+    # to work on this function: check the the words processing here that is being done
+    def match_weights_db(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=BASIC_WORD_PREPROCESS):
+
+        
+
+        if weights is None:
+            log_and_warn("No weights DB is found")
+            return claims
+
+        if weight_transformations:
+            word_preprocessor = Preprocessor(weight_transformations)
+            weights = word_preprocessor.calculate(weights)
+
+        #weight_descriptions = weights[["primary_desc", "secondary_desc", "material", "dimensions", "values_desc"]].to_dict('records')
+        #flo-dev: just work with top rows
+        weight_descriptions = weights[["primary_desc", "secondary_desc", "material", "dimensions", "values_desc"]].iloc[309:312].to_dict('records')
+
+        max_weight_per_primary_desc = weights.loc[weights.groupby("primary_desc")["weight_lbs"].idxmax()].reset_index(drop=True)
+
+        #if data is None: this seems not to run
+        if True:
+            log_and_warn('running the if loop function')
+            data = claims.copy()
+
+            if transformations:
+                word_preprocessor = Preprocessor(transformations)
+                data = word_preprocessor.calculate(data)
+
+            unit_columns = ["weight_lbs", "weight_ustons", "volume_cf", "volume_cy"]
+            max_unit_columns = ["max_"+col for col in unit_columns]
+
+            all_unit_columns = unit_columns + max_unit_columns
+
+            data[["pentatonic_id", "weights_primary_desc", "weights_secondary_desc", "weights_material", "weights_dimensions", "weights_values_desc", "unit", "max_unit"]] = ""
+            data[all_unit_columns] = 0
+
+            unit_columns = unit_columns + ["unit"]
+            max_unit_columns = max_unit_columns + ["max_unit"]
+
+            total_full_desc = len(weight_descriptions)
+
+            if total_full_desc > 0:
+                logging.info("Found {} compound descriptions in weights DB".format(total_full_desc))
+            else:
+                logging.warning("Found no valid compound descriptions in weights DB. Exiting...".format(total_full_desc))
+                return data
+
+            item_desc = data["item_description"].unique().tolist()
+            category_desc = data["subcategory_prev"].unique().tolist()
+
+            #avoid NaNs
+            item_desc = [item for item in item_desc if item == item]
+            category_desc = [category for category in category_desc if category == category]
+
+            total_item_desc = len(item_desc)
+            if total_item_desc > 0:
+                logging.info("Found {} unique item descriptions in claims DB".format(total_item_desc))
+            else:
+                logging.error("Found no item descriptions in claims DB!".format(total_item_desc))
+                raise Exception("Weights DB matching failed due to no item descriptions found in claims DB. Check your claim data")
+
+            total_category_desc = len(category_desc)
+            if total_category_desc > 0:
+                logging.info("Found {} unique category descriptions in claims DB".format(total_category_desc))
+            else:
+                log_and_warn("Found no category descriptions in claims DB!".format(total_category_desc))
+
+            chunk_size = 3
+            for desc in weight_descriptions:
+
+                matched_mask = True
+                matched_item_desc = item_desc.copy() #all item descriptions in here from claims in the beginning
+                matched_category_desc = category_desc.copy() # all item descriptions in here from claims in the beginning
+                logging.info("=================================================")
+                for key in desc: #
+
+                    if desc[key]:
+
+                        logging.info("Processing {} '{}'...".format(key, desc[key]))
+
+                        if ";" not in desc[key]:
+                            desc_split = [" ".join(desc[key].split()[i:i+chunk_size]) for i in range(0, len(desc[key].split()), chunk_size)]
+
+                            if len(desc[key].split()) > 3:
+                                logging.info("Length of '{}' is too long for regex search. Splitting in chunks".format(desc[key]))
+                        else:
+                            desc_split = [desc[key]]
+
+                        for desc_chunk in desc_split:     
+
+                            logging.info("Processing chunk '{}' from {} '{}'".format(desc_chunk, key, desc[key]))
+
+                            compiled_regex_desc = re.compile(format_and_regex(desc_chunk.lower(), permutations=True, is_synonyms=True))
+
+                            logging.info("Regex search: {}".format(compiled_regex_desc))
+
+                            matched_item_desc = list(filter(compiled_regex_desc.match, matched_item_desc))
+                            matched_category_desc = list(filter(compiled_regex_desc.match, matched_category_desc))
+
+                            #florian - test output
+                            log_and_warn('testing the output here:{} / {}'.format(matched_item_desc, matched_category_desc))
+
+                            if len(matched_item_desc) == 0 and len(matched_category_desc) == 0:
+                                break
+
+                        matched_mask &= (weights[key] == desc[key])
+
+                        log_and_warn(
+                        "Total {}/{} claim descriptions are matched with {} {} from weights DB".format(len(matched_item_desc),
+                                                                                                data.shape[0],
+                                                                                                key,
+                                                                                                desc[key]
+                                                                                                    ))
+                        log_and_warn(
+                        "Total {}/{} claim category descriptions are matched with {} {} from weights DB".format(len(matched_category_desc),
+                                                                                                data.shape[0],
+                                                                                                key,
+                                                                                                desc[key]
+                                                                                                    ))
+
+                        #replacing the weight when several matches
+                        if key == "primary_desc" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
+                            regex_mask = (data["item_description"].isin(matched_item_desc) | data["subcategory_prev"].isin(matched_category_desc))
+                            data = self.add_tag(data, regex_mask, "weights_primary_desc", desc[key])
+                            
+                            primary_mask = (max_weight_per_primary_desc["primary_desc"] == desc[key])
+                            weight_lbs = max_weight_per_primary_desc.loc[primary_mask, "weight_lbs"].iloc[0]
+
+                            replace_mask = regex_mask & (data["max_weight_lbs"] < weight_lbs)
+
+                            if replace_mask.sum() > 0:
+                                logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
+                                    desc[key],
+                                    replace_mask.sum(),
+                                    regex_mask.sum(),
+                                    weight_lbs
+                                ))
+
+                                for col in max_unit_columns:
+                                    unit = max_weight_per_primary_desc.loc[primary_mask, col.replace("max_","")].iloc[0]
+                                    data = self.replace_tag(data, replace_mask, col, unit)
+
+                total_matched_items = 0
+                total_matched_item_desc = len(matched_item_desc)
+                total_matched_category_desc = len(matched_category_desc)
+
+                valid_item_matching = (total_matched_item_desc > 0 and total_matched_item_desc < total_item_desc)
+                valid_category_matching = (total_matched_category_desc > 0 and total_matched_category_desc < total_category_desc)
+
+                if valid_item_matching or valid_category_matching:
+
+                    regex_mask = (data["item_description"].isin(matched_item_desc) | data["subcategory_prev"].isin(matched_category_desc))
+                    total_matched_items = regex_mask.sum()
+
+                    #florian - added for the secondary col --> not working yet
+                    sec_desc = weights.loc[matched_mask, "secondary_desc"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_secondary_desc", sec_desc) 
+                    
+                    weights_material = weights.loc[matched_mask, "material"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_material", weights_material)
+
+                    weights_dimensions = weights.loc[matched_mask, "dimensions"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_dimensions", weights_dimensions)
+
+                    weights_values_desc = weights.loc[matched_mask, "values_desc"].iloc[0]
+                    data = self.add_tag(data, regex_mask, "weights_values_desc", weights_values_desc)
+                    #florian - end
+
+                    pentatonic_id = weights.loc[matched_mask, "pentatonic_id"].iloc[0]
+
+                    if pentatonic_id:
+                        data = self.add_tag(data, regex_mask, "pentatonic_id", pentatonic_id)
+
+                        weight_lbs = weights.loc[matched_mask, "weight_lbs"].iloc[0]
+
+                        replace_mask = regex_mask & (data["weight_lbs"] < weight_lbs)
+
+                        if replace_mask.sum() > 0:
+                            logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
+                                pentatonic_id,
+                                replace_mask.sum(),
+                                regex_mask.sum(),
+                                weight_lbs                                                                                           
+                            ))
+                            for col in unit_columns:
+                                unit = weights.loc[matched_mask, col].iloc[0]
+                                data = self.replace_tag(data, replace_mask, col, unit)
+                    else:
+                        log_and_warn("No pentatonic ID can be assigned to matched items {} and matched descriptions {}".format(matched_item_desc, matched_category_desc))
+
+
+                log_and_warn(
+                        "Total {}/{} claim items are matched with weights DB".format(
+                            total_matched_items,
+                            data.shape[0],
+                            key,
+                            desc[key]
+                        ))
+
+
+            #commenting out the below so we can run tests without
+            '''id_unmatched_mask = (data["pentatonic_id"].isna() | (data["pentatonic_id"] == ""))
+            primary_matched_mask = (data["weights_primary_desc"].notna() & (data["weights_primary_desc"] != ""))
+            valid_weights = (data["max_weight_lbs"].notna() & (data["max_weight_lbs"] > 0))
+
+            only_primary_matched_mask = id_unmatched_mask & primary_matched_mask & valid_weights
+
+            if only_primary_matched_mask.sum() > 0:
+                log_and_warn(
+                        "Total {}/{} claims were matched by primary description but not Pentatonic ID. Replacing weights with non-zero max weight per primary desc ...".format(
+                                                                                                only_primary_matched_mask.sum(),
+                                                                                                data.shape[0]
+                        ))
+                for col in unit_columns:
+                    data.loc[only_primary_matched_mask, col] = data.loc[only_primary_matched_mask, "max_"+col]
+
+            data[all_unit_columns] = data[all_unit_columns].fillna(0)'''
+
             self.save_data_to_csv(data, filename, index=False)
-            self.save_data_to_excel(data, filename.replace(".csv", ".xlsx"), index=False)
+            #self.save_data_to_excel(data, filename.replace(".csv", ".xlsx"), index=False)
 
         return data
 
