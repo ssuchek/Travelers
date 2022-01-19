@@ -712,6 +712,7 @@ class ClaimDataLoader(object):
                 data = word_preprocessor.calculate(data)
 
             unit_columns = ["weight_lbs", "weight_ustons", "volume_cf", "volume_cy"]
+
             # max_unit_columns = ["max_"+col for col in unit_columns]
 
             # all_unit_columns = unit_columns + max_unit_columns
@@ -835,6 +836,10 @@ class ClaimDataLoader(object):
                     total_matched_items = regex_mask.sum()
 
                     pentatonic_id = weights.loc[matched_mask, "pentatonic_id"].iloc[0]
+                    weights_unit = weights.loc[matched_mask, "unit"].iloc[0]
+
+                    if weights_unit:
+                        regex_mask &= (data["item_unit_cd"] == weights_unit)
 
                     if pentatonic_id:
                         data = self.add_tag(data, regex_mask, "pentatonic_id", pentatonic_id)
@@ -848,7 +853,7 @@ class ClaimDataLoader(object):
                                 pentatonic_id,
                                 replace_mask.sum(),
                                 regex_mask.sum(),
-                                weight_lbs                                                                                           
+                                weight_lbs                                                                                               
                             ))
                             for col in unit_columns:
                                 unit = weights.loc[matched_mask, col].iloc[0]
