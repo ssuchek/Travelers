@@ -601,7 +601,7 @@ class ClaimDataLoader(object):
 
 
     @read_if_exist_decorator
-    def match_weights_db_2(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=None):
+    def match_weights_db(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=None):
         
         if weights is None:
             log_and_warn("No weights DB is found")
@@ -611,7 +611,8 @@ class ClaimDataLoader(object):
             word_preprocessor = Preprocessor(weight_transformations)
             weights = word_preprocessor.calculate(weights)
 
-        weight_descriptions = weights[["primary_desc", "secondary_desc", "material", "dimensions", "values_desc"]].to_dict('records')
+        #weight_descriptions = weights[["primary_desc", "secondary_desc", "material", "dimensions", "values_desc"]].iloc[1630:1650].to_dict('records')
+        weight_descriptions = weights[["primary_desc", "secondary_desc", "material", "dimensions", "values_desc"]].iloc[1629:1674].to_dict('records')
 
         weights[["matched_primary", "matched_secondary"]] = 0
 
@@ -629,7 +630,7 @@ class ClaimDataLoader(object):
 
             all_unit_columns = unit_columns + max_unit_columns
 
-            data[["pentatonic_id", "weights_primary_desc", "unit", "max_unit", "weights_unit", "weights_secondary_desc", "weights_material", "weights_dimensions", "weights_values_desc"]] = ""
+            data[["pentatonic_id", "weights_id", "weights_primary_desc", "unit", "max_unit", "weights_unit", "weights_secondary_desc", "weights_material", "weights_dimensions", "weights_values_desc"]] = ""
             data[all_unit_columns] = 0
 
             unit_columns = unit_columns + ["unit"]
@@ -720,26 +721,26 @@ class ClaimDataLoader(object):
                             regex_mask = (data["item_description"].isin(matched_item_desc) | data["subcategory_prev"].isin(matched_category_desc))
                             data = self.add_tag(data, regex_mask, "weights_primary_desc", desc[key])
 
-                            primary_mask = (max_weight_per_primary_desc["primary_desc"] == desc[key])
-                            weight_lbs = max_weight_per_primary_desc.loc[primary_mask, "weight_lbs"].iloc[0]
+                            #primary_mask = (max_weight_per_primary_desc["primary_desc"] == desc[key])
+                            #weight_lbs = max_weight_per_primary_desc.loc[primary_mask, "weight_lbs"].iloc[0]
 
-                            replace_mask = regex_mask & (data["max_weight_lbs"] < weight_lbs)
+                            #replace_mask = regex_mask & (data["max_weight_lbs"] < weight_lbs)
 
-                            if replace_mask.sum() > 0:
-                                logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
-                                    desc[key],
-                                    replace_mask.sum(),
-                                    regex_mask.sum(),
-                                    weight_lbs
-                                ))
+                            #if replace_mask.sum() > 0:
+                            #    logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
+                            #        desc[key],
+                            #        replace_mask.sum(),
+                            #        regex_mask.sum(),
+                            #        weight_lbs
+                            #    ))
 
-                                for col in max_unit_columns:
-                                    unit = max_weight_per_primary_desc.loc[primary_mask, col.replace("max_","")].iloc[0]
-                                    data = self.replace_tag(data, replace_mask, col, unit)
+                            #    for col in max_unit_columns:
+                            #        unit = max_weight_per_primary_desc.loc[primary_mask, col.replace("max_","")].iloc[0]
+                            #        data = self.replace_tag(data, replace_mask, col, unit)
 
-                        if key == "secondary_desc" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
-                            secondary_mask = (weights["secondary_desc"] == key)
-                            weights.loc[secondary_mask, "matched_secondary"] = 1
+                        #if key == "secondary_desc" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
+                        #    secondary_mask = (weights["secondary_desc"] == key)
+                        #    weights.loc[secondary_mask, "matched_secondary"] = 1
 
                 total_matched_items = 0
                 total_matched_item_desc = len(matched_item_desc)
@@ -817,8 +818,8 @@ class ClaimDataLoader(object):
             data[all_unit_columns] = data[all_unit_columns].fillna(0)
 
             data["unit_matching"] = -1
-            valid_unit_weight_mask = (data["weights_unit"].notna() & (data["weights_unit"] != ""))
-            unit_matching_mask = (data["item_unit_cd"] == data["weights_unit"])
+            valid_unit_weight_mask = (data["max_unit"].notna() & (data["max_unit"] != ""))
+            unit_matching_mask = (data["item_unit_cd"] == data["max_unit"])
             data.loc[unit_matching_mask & valid_unit_weight_mask, "unit_matching"] = 1
             data.loc[~unit_matching_mask & valid_unit_weight_mask, "unit_matching"] = 0
 
@@ -834,15 +835,20 @@ class ClaimDataLoader(object):
             data2.loc[mask_1 | mask_2, 'max_weight_ustons'] = 0
             data2.loc[mask_1 | mask_2, 'max_volume_cf'] = 0
             data2.loc[mask_1 | mask_2, 'max_volume_cy'] = 0
-            filename_2 = 'C:/Users/Florian/projects/Travelers/data/output/revised/single_year/without_unitsfixed.csv'
+            filename_2 = 'C:/Users/Florian/projects/Travelers/data/output/revised/single_year/0119_1446_without_unitsfixed.csv'
 
             self.save_data_to_csv(data2, filename, index=False)
             self.save_data_to_csv(data, filename_2, index=False)
-            self.save_data_to_excel(data2, filename.replace(".csv", ".xlsx"), index=False)
+            #self.save_data_to_excel(data2, filename.replace(".csv", ".xlsx"), index=False)
+
+            lines = ['Overall Average Deviation: ' + str('')]
+            with open('C:/Users/Florian/projects/Travelers/data/output/revised/single_year/0119_metrics.txt', 'w') as f:
+                f.writelines(lines)
+
 
     @read_if_exist_decorator
     # to work on this function: check the the words processing here that is being done
-    def match_weights_db(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=BASIC_WORD_PREPROCESS):
+    def match_weights_db_old(self, weights, claims, filename, data=None, weight_transformations=WEIGHTS_WORD_PREPROCESS, transformations=BASIC_WORD_PREPROCESS):
 
         
 

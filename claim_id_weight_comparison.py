@@ -5,7 +5,7 @@ import pandas as pd
 
 import re
 
-data = pd.read_csv("data/output/revised/single_year/0118_1718_claims_weight_db_matched.csv")
+data = pd.read_csv("data/output/revised/single_year/0119_1050_claims_weight_db_matched.csv")
 
 # Data for dumpster loads only
 truck_mask = (data["subcategory_prev"] == "GENERAL DEMOLITION") & data["item_description"].str.contains("DUMPSTER LOAD")
@@ -80,7 +80,7 @@ claim_id_data["abs_excessive_truck_weight_percentage"] = claim_id_data["excessiv
 average_deviation = claim_id_data["abs_excessive_truck_weight_percentage"].mean()
 
 # Saving data to Excel
-claim_id_data.to_excel(("data/output/0118_claim_id_weight_comparison.xlsx"))
+claim_id_data.to_excel(("data/output/0119_claim_id_weight_comparison.xlsx"))
 
 plot = claim_id_data["excessive_truck_weight_percentage"].hist(bins=100, range=(-100, 100), grid=True)
 
@@ -93,12 +93,12 @@ plt.yticks(fontsize=20)
 fig = plt.gcf()
 fig.set_size_inches(18.5, 10.5, forward=True)
 
-plt.savefig('data/output/0118_complete_percent_count_excessive_truck_weight_frequency.png')
+plt.savefig('data/output/0119_1050_complete_percent_count_excessive_truck_weight_frequency.png')
 
 plt.yscale("log")
 
-plt.savefig('data/output/0118_complete_percent_count_excessive_truck_weight_frequency_logscale.png')
+plt.savefig('data/output/0119_1050_complete_percent_count_excessive_truck_weight_frequency_logscale.png')
 
 lines = ['Overall Average Deviation: ' + str(average_deviation)]
-with open('data/output/metrics.txt', 'w') as f:
+with open('data/output/0119_1050_metrics.txt', 'w') as f:
     f.writelines(lines)
