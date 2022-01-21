@@ -1,0 +1,35 @@
+Total Claims with weight information:2841
+
+Claims that are within 10% deviation from given weight: 30
+
+Overall Average Deviation (in %): 105.88573489238765
+
+Min Deviation (in %): -4964.13853125
+
+Max Deviation (in %): 100.0
+
+-----------------------------------------------
+
+NEGATIVE: We overestimate
+
+Number of overestimated claims: 387
+
+Average Overestimation (in %): -261.48999830504175
+
+-----------------------------------------------
+
+POSTIVE: We underestimate (either not enough matches or a saving)
+
+Number of overestimated claims: 2454
+
+Average Overestimation (in %): 81.34667623684693
+
+-------------------------------------------------
+
+Potential business savings:
+
+Claims with up to 10% saving in weight: 30
+
+Claims with up to 20% saving in weight: 60
+
+Claims with up to 50% saving in weight: 262

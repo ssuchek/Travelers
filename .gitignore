@@ -134,6 +134,8 @@ dmypy.json
 data/raw/
 data/output/
 data/indexes
+friday_sprint/
+misc_data/
 
 # Mac artefacts
 .DS_Store

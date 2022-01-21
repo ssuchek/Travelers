@@ -5,7 +5,10 @@ import pandas as pd
 
 import re
 
-data = pd.read_csv("C:/Users/Florian/projects/Travelers/data/output/revised/single_year/stas_220120/claims_weight_db_matched_v0.6.0.csv")
+import time
+timestr = time.strftime("%Y%m%d-%H%M%S")
+
+data = pd.read_csv("C:/Users/Florian/projects/Travelers/friday_sprint/matching/20220121-135137_matching_table.csv")
 
 # Data for dumpster loads only
 truck_mask = (data["subcategory_prev"] == "GENERAL DEMOLITION") & data["item_description"].str.contains("DUMPSTER LOAD")
@@ -71,7 +74,7 @@ claim_id_data = data[~truck_mask].groupby(["claim_id"]).agg(
     matched_fraction=("item_weight_lbs", matching_fraction)
 )
 
-claim_id_data.to_csv(("data/output/count_temp_save.csv"))
+#claim_id_data.to_csv(("data/output/count_temp_save.csv"))
 
 # Calculate difference between total truck weight and total estimated weight of claims in US tonnes
 claim_id_data["excessive_truck_weight"] = claim_id_data["total_truck_weight"].astype('float') - claim_id_data["weight_estimation_ustons"].astype('float')
@@ -80,7 +83,7 @@ claim_id_data["abs_excessive_truck_weight_percentage"] = claim_id_data["excessiv
 average_deviation = claim_id_data["abs_excessive_truck_weight_percentage"].mean()
 
 # Saving data to Excel
-claim_id_data.to_excel(("data/output/0120_claim_id_weight_comparison.xlsx"))
+claim_id_data.to_excel(("friday_sprint/results/" + timestr +  "_claim_id_weight_comparison.xlsx"))
 
 plot = claim_id_data["excessive_truck_weight_percentage"].hist(bins=100, range=(-100, 100), grid=True)
 
@@ -93,12 +96,12 @@ plt.yticks(fontsize=20)
 fig = plt.gcf()
 fig.set_size_inches(18.5, 10.5, forward=True)
 
-plt.savefig('data/output/0120_1050_complete_percent_count_excessive_truck_weight_frequency.png')
+plt.savefig("friday_sprint/results/" + timestr + "_truck_weight_frequency.png")
 
 plt.yscale("log")
 
-plt.savefig('data/output/0120_1050_complete_percent_count_excessive_truck_weight_frequency_logscale.png')
+plt.savefig("friday_sprint/results/" + timestr + "_truck_weight_frequency_log.png")
 
 lines = ['Overall Average Deviation: ' + str(average_deviation)]
-with open('data/output/0120_1050_metrics.txt', 'w') as f:
+with open("friday_sprint/results/" + timestr + "_metrics.txt", 'w') as f:
     f.writelines(lines)
