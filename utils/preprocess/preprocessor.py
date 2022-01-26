@@ -284,12 +284,25 @@ class PreprocessTransformation():
     @remove_spaces_and_strip
     def remove_one_letter_non_alphanumeric_words(col):
         """
-        Remove single letter words
+        Remove single letter non-alphanumeric words
         :param col                          an input column Series object
         """
         col_copy = col.copy()
         col_copy = col_copy.str.split(" ")
         col_copy = col_copy.apply(lambda row: [word.strip() for word in row if len(word) > 1 or (len(word) == 1 and word.isalnum())])
+        col_copy = col_copy.str.join(" ")
+        return col_copy
+
+    @staticmethod
+    @remove_spaces_and_strip
+    def remove_numeric_words(col):
+        """
+        Remove numeric words
+        :param col                          an input column Series object
+        """
+        col_copy = col.copy()
+        col_copy = col_copy.str.split(" ")
+        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if not re.match('[\d/-]+$', word)])
         col_copy = col_copy.str.join(" ")
         return col_copy
 

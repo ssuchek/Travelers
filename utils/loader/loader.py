@@ -1,3 +1,4 @@
+from cmath import log
 import collections
 from distutils.log import error
 import ijson
@@ -24,7 +25,7 @@ from config import config
 
 from utils.preprocess import Preprocessor, PreprocessTransformation
 from utils.preprocess import BASIC_PREPROCESS, CATEGORIES_WORD_PREPROCESS
-from utils.preprocess import WEIGHTS_PREPROCESS, WEIGHTS_WORD_PREPROCESS
+from utils.preprocess import WEIGHTS_PREPROCESS, WEIGHTS_WORD_PREPROCESS, WEIGHTS_WORD_FREQUENCY_PREPROCESS
 from utils.preprocess.dataframe import aggregate_col_values_to_comma_list
 
 from utils.helpers import format_and_regex, pluralize
@@ -302,37 +303,53 @@ class ClaimDataLoader(object):
 
         return data
 
-    def most_frequent_words(self, data, filename, column, transformations=CATEGORIES_WORD_PREPROCESS):
+    @read_if_exist_decorator
+    def get_word_frequency(self, claims, filename, column, words=None, data=None, transformations=WEIGHTS_WORD_FREQUENCY_PREPROCESS):
 
-        claims = data.copy()
+        if data is None:
+            data = claims.copy()
 
-        if transformations:
-            frequency_preprocessor = Preprocessor(transformations)
-            claims = frequency_preprocessor.calculate(claims)
+            if transformations:
+                frequency_preprocessor = Preprocessor(transformations)
+                data = frequency_preprocessor.calculate(data)
 
-        claims[column] = claims[column].astype(str).str.split()
+            if words:
+                if isinstance(words, list):
+                    regex_expr = format_and_regex(";".join(words))        
+                else:
+                    regex_expr = format_and_regex(words)   
 
-        nested_item_list = claims[column].values.tolist()
+                words_mask = data[column].astype(str).str.contains(regex_expr, flags=re.IGNORECASE, regex=True)
+                data = data[words_mask]
+                
+                logging.info("Start frequency analysis for claims containing words: {}".format(words))
+            else:
+                logging.info("Start frequency analysis for all claims")
 
-        item_list = list(itertools.chain.from_iterable(nested_item_list))
+            data[column] = data[column].astype(str).str.split()
 
-        words = collections.Counter(item_list)
+            nested_item_list = data[column].values.tolist()
 
-        total_words = len(set(words))
+            item_list = list(itertools.chain.from_iterable(nested_item_list))
 
-        logging.info("Total unique words: {}".format(total_words))
+            words = collections.Counter(item_list)
 
-        most_frequent_words = pd.DataFrame(words.most_common(total_words),
-                                           columns=['words', 'count'])
+            total_words = len(set(words))
 
-        filename = column + "_" + filename
+            logging.info("Total unique words: {}".format(total_words))
 
-        self.save_data_to_csv(most_frequent_words, filename.format(extension="csv"), index=False)
-        self.save_data_to_excel(most_frequent_words, filename.format(extension="xlsx"), index=False)
+            word_frequency = pd.DataFrame(words.most_common(total_words),
+                                            columns=['words', 'count'])
 
-        return most_frequent_words
 
-    def plot_most_frequent_words(self, data, filename):
+            self.save_data_to_csv(word_frequency, filename, index=False)
+            self.save_data_to_excel(word_frequency, filename.replace(".csv", ".xlsx"), index=False)
+
+            return word_frequency
+
+        return data
+
+    def plot_get_word_frequency(self, data, filename):
 
         fig, (ax1, ax2) = plt.subplots(1, 2)
 
@@ -358,7 +375,7 @@ class ClaimDataLoader(object):
 
         plt.savefig(filename, bbox_inches='tight', facecolor='w', dpi=600)
 
-    def add_tag(self, data, mask, tag_col, tag):
+    def add_tag(self, data, mask, tag_col, tag, logging=True):
         """
         Aggregates multiple tags in the single value of type tag1,tag2,tag3,...
         :param data:           an input DataFrame
@@ -366,21 +383,27 @@ class ClaimDataLoader(object):
         :param tag_col:         name of the tag column
         :param tag:             an input tag to incorporate in tag column
         """
+        if not isinstance(tag, str):
+            tag = str(tag)
+
         tag_mask = data[tag_col].fillna("").astype(str).str.contains(tag + ",") | data[tag_col].fillna("").astype(str).str.contains(
             "," + tag) | (data[tag_col] == tag)
-        log_and_warn("{}/{} items are previously tagged as {}: no need to retag".format((mask & tag_mask).sum(),
+
+        if logging:
+            log_and_warn("{}/{} claims are previously tagged as {}: no need to retag".format((mask & tag_mask).sum(),
                                                                                         data.shape[0],
                                                                                         tag
                                                                                         ))
 
-        log_and_warn("Tagged {}/{} items as {}".format((mask & (~tag_mask)).sum(),
-                                                       data.shape[0],
-                                                       tag
-                                                       ))
-
         def add_tag_to_str(x, tag):
 
-            if x == "":
+            if not isinstance(tag, str):
+                tag = str(tag)
+
+            if not isinstance(x, str):
+                x = str(x)
+
+            if x == "" or x == 0:
                 return tag
 
             if not tag + "," in x and not "," + tag in x:
@@ -392,9 +415,15 @@ class ClaimDataLoader(object):
             data.loc[mask & (~tag_mask), tag_col] = data.loc[mask & (~tag_mask), tag_col].fillna("").apply(
                 lambda x: add_tag_to_str(x, tag))
 
+        if logging:
+            log_and_warn("Tagged {}/{} claims as {}".format((mask & (~tag_mask)).sum(),
+                                                       data.shape[0],
+                                                       tag
+                                                       ))
+
         return data
 
-    def replace_tag(self, data, mask, tag_col, tag):
+    def replace_tag(self, data, mask, tag_col, tag, logging=True):
         """
         Aggregates multiple tags in the single value of type tag1,tag2,tag3,...
         :param data:           an input DataFrame
@@ -403,7 +432,8 @@ class ClaimDataLoader(object):
         :param tag:             an input tag to incorporate in tag column
         """
         
-        log_and_warn("For {}/{} items tag in column {} is replaced with value {}".format(mask.sum(),
+        if logging:
+            log_and_warn("For {}/{} claims tag in column {} is replaced with value {}".format(mask.sum(),
                                                                         data.shape[0],
                                                                         tag_col,
                                                                         tag
@@ -711,7 +741,7 @@ class ClaimDataLoader(object):
                 word_preprocessor = Preprocessor(transformations)
                 data = word_preprocessor.calculate(data)
 
-            unit_columns = ["weight_lbs", "weight_ustons", "volume_cf", "volume_cy"]
+            # unit_columns = ["weight_lbs", "weight_ustons", "volume_cf", "volume_cy"]
 
             # max_unit_columns = ["max_"+col for col in unit_columns]
 
@@ -720,9 +750,9 @@ class ClaimDataLoader(object):
             data[["pentatonic_id", "weights_primary_desc", "unit"]] = ""
             #data[["pentatonic_id", "weights_primary_desc", "unit", "max_unit", "weights_unit"]] = ""
             # data[all_unit_columns] = 0
-            data[unit_columns] = 0
+            # data[unit_columns] = 0
 
-            unit_columns = unit_columns + ["unit"]
+            # unit_columns = unit_columns + ["unit"]
             # max_unit_columns = max_unit_columns + ["max_unit"]
 
             total_full_desc = len(weight_descriptions)
@@ -843,21 +873,29 @@ class ClaimDataLoader(object):
 
                     if pentatonic_id:
                         data = self.add_tag(data, regex_mask, "pentatonic_id", pentatonic_id)
+                        data.loc[regex_mask, "unit"] = weights_unit
 
-                        weight_lbs = weights.loc[matched_mask, "weight_lbs"].iloc[0]
+                        # for col in unit_columns:
+                        #     unit = weights.loc[matched_mask, col].iloc[0]
+                        #     if col == "unit":
+                        #         data = self.replace_tag(data, regex_mask, col, unit, logging=False)
+                        #     else:
+                        #         data = self.add_tag(data, regex_mask, col, unit, logging=False)
 
-                        replace_mask = regex_mask & (data["weight_lbs"] < weight_lbs)
+                        # weight_lbs = weights.loc[matched_mask, "weight_lbs"].iloc[0]
 
-                        if replace_mask.sum() > 0:
-                            logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
-                                pentatonic_id,
-                                replace_mask.sum(),
-                                regex_mask.sum(),
-                                weight_lbs                                                                                               
-                            ))
-                            for col in unit_columns:
-                                unit = weights.loc[matched_mask, col].iloc[0]
-                                data = self.replace_tag(data, replace_mask, col, unit)
+                        # replace_mask = regex_mask & (data["weight_lbs"] < weight_lbs)
+
+                        # if replace_mask.sum() > 0:
+                        #     logging.info("{}: replacing {}/{} values for higher {} lbs weight values ...".format(
+                        #         pentatonic_id,
+                        #         replace_mask.sum(),
+                        #         regex_mask.sum(),
+                        #         weight_lbs                                                                                               
+                        #     ))
+                        #     for col in unit_columns:
+                        #         unit = weights.loc[matched_mask, col].iloc[0]
+                        #         data = self.replace_tag(data, replace_mask, col, unit)
                     else:
                         log_and_warn("No pentatonic ID can be assigned to matched items {} and matched descriptions {}".format(matched_item_desc, matched_category_desc))
 
@@ -903,12 +941,6 @@ class ClaimDataLoader(object):
             #     for col in unit_columns:
             #         data.loc[only_primary_matched_mask, col] = data.loc[only_primary_matched_mask, "max_"+col]
 
-            data["unit_matching"] = "undefined"
-            valid_unit_mask = (data["unit"].notna() & (data["unit"] != ""))
-            unit_matching_mask = (data["unit"] == data["item_unit_cd"])
-            data.loc[unit_matching_mask & valid_unit_mask, "unit_matching"] = "yes"
-            data.loc[~unit_matching_mask & valid_unit_mask, "unit_matching"] = "no"
-
             drop_columns = [col for col in data.columns if col.endswith("_processed")]
             if drop_columns:
                 data = data.drop(columns=drop_columns)
@@ -925,6 +957,24 @@ class ClaimDataLoader(object):
 
 
         return data
+
+    # def calculate_units(self, weights, data):
+
+    #     unit_columns = ["weight_lbs", "weight_ustons", "volume_cf", "volume_cy"]
+
+    #     data[unit_columns] = 0
+
+    #     data["unit_matching"] = "undefined"
+    #     valid_unit_mask = (data["unit"].notna() & (data["unit"] != ""))
+    #     unit_matching_mask = (data["unit"] == data["item_unit_cd"])
+    #     data.loc[unit_matching_mask & valid_unit_mask, "unit_matching"] = "yes"
+    #     data.loc[~unit_matching_mask & valid_unit_mask, "unit_matching"] = "no"
+
+    #     calculate_mask = data["pentatonic_id"].fillna("").str.contains(",")
+
+    #     def calculate():
+
+
 
     def calculate_matched_match_weights_db(self, matched_claims, primary_desc, categories, filename):
 

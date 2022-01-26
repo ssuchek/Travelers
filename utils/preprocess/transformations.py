@@ -1,3 +1,4 @@
+import config as constants
 from .preprocessor import PreprocessTransformation
 
 BASIC_PREPROCESS = [
@@ -62,12 +63,9 @@ WEIGHTS_WORD_PREPROCESS = [
 ]
 
 WEIGHTS_WORD_FREQUENCY_PREPROCESS = [
-    PreprocessTransformation("primary_desc", "primary_desc", "remove_punctuation"),
-    PreprocessTransformation("primary_desc", "primary_desc", "remove_stop_words"),
-    PreprocessTransformation("primary_desc", "primary_desc", "remove_verbs"),
-    PreprocessTransformation("primary_desc", "primary_desc", "remove_one_letter_non_alphanumeric_words"),
-    PreprocessTransformation("secondary_desc", "secondary_desc", "remove_punctuation"),
-    PreprocessTransformation("secondary_desc", "secondary_desc", "remove_stop_words"),
-    PreprocessTransformation("secondary_desc", "secondary_desc", "remove_verbs"),
-    PreprocessTransformation("secondary_desc", "secondary_desc", "remove_one_letter_non_alphanumeric_words")
+    PreprocessTransformation("item_description", "item_description", "remove_punctuation"),
+    PreprocessTransformation("item_description", "item_description", "remove_stop_words", constants.FREQUENCY_STOP_WORDS),
+    PreprocessTransformation("item_description", "item_description", "remove_verbs"),
+    PreprocessTransformation("item_description", "item_description", "remove_one_letter_words"),
+    PreprocessTransformation("item_description", "item_description", "remove_numeric_words")
 ]

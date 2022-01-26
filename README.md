@@ -131,7 +131,7 @@ Contains raw source files and output CSV file with data combined from raw source
 
 #### data/output/
 Contains output files:
-**most_frequent_words**: collection of the most frequent words in the claim descriptions
+**word_frequency**: collection of the most frequent words in the claim descriptions
 **Pentatonic_Xact_Categories_5yr_preprocessed**: preprocessed raw data (removed stop words, unnecessary claims and fill NaNs)
 **Pentatonic_Xact_Categories_5yr_categorized**: collection data categorized according to the structure defined in schema file *categories_schema.json*.
 **categories_stats**: number of items in each category and subcategory after categorization
