@@ -12,7 +12,7 @@
 #     rm figs/*
 # fi
 
-VERSION="v0.6.4"
+VERSION="v0.6.6"
 # MATCHING_FILES="data/output/revised/single_year/$VERSION/"
 # if ls $MATCHING_FILES* &> /dev/null; then
 #     rm $MATCHING_FILES*
@@ -23,10 +23,12 @@ VERSION="v0.6.4"
 #     rm $PREPR_WEIGHTS_DB*
 # fi
 
-FREQ_PATH=data/output/revised/single_year/$VERSION/
-if ls $FREQ_PATH*frequency* &> /dev/null; then
-    rm $FREQ_PATH*frequency*
-fi
+# FREQ_PATH=data/output/revised/single_year/$VERSION/
+# if ls $FREQ_PATH*frequency* &> /dev/null; then
+#     rm $FREQ_PATH*frequency*
+# fi
 
 # Run script
-.venv/bin/python categories.py
+# .venv/bin/python categories.py
+# .venv/bin/python calculate_weights.py
+.venv/bin/python claim_id_weight_comparison.py

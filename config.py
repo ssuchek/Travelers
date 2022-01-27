@@ -269,6 +269,17 @@ KEEP_ITEMS = [
     "haul", "dispose"
 ]
 
+TRUCK_COST_MAP = {
+    "PICKUP TRUCK LOAD" : 98,
+    "DUMPSTER LOAD" : {
+        "TRUCK" : 234,
+        "12 YARDS" : 358,
+        "20 YARDS" : 471,
+        "30 YARDS" : 930,
+        "40 YARDS" : 1931,
+    }
+}
+
 FIELD_RENAME_MAP = {
     "Claim Identifier" : "claim_id",
     "category_description" : "subcategory_prev",

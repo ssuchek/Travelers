@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm, gaussian_kde
 
 from config import config
+import config as constants
 
 import numpy as np
 import pandas as pd
@@ -15,11 +16,13 @@ filepath = "{0}/{1}/claims_weight_db_matched_weights_{1}.csv".format(config["dat
 data = pd.read_csv(filepath)
 
 # Data for dumpster loads
-truck_mask = (data["subcategory_prev"] == "GENERAL DEMOLITION") & data["item_description"].str.contains("DUMPSTER LOAD")
+truck_id = "DUMPSTER LOAD"
+truck_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & data["item_description"].str.contains(truck_id, flags=re.IGNORECASE, regex=True)
 truck_data = data[truck_mask].copy()
 
 # Data for pickup trucks loads
-pickup_mask = (data["subcategory_prev"] == "GENERAL DEMOLITION") & data["item_description"].str.contains("HAUL DEBRIS - PER PICKUP TRUCK LOAD")
+pickup_id = "PICKUP TRUCK LOAD"
+pickup_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & data["item_description"].str.contains(pickup_id, flags=re.IGNORECASE, regex=True)
 pickup_data = data[pickup_mask].copy()
 
 # Mask for items associated with valid pentatonic IDs
@@ -32,7 +35,7 @@ print("Available weight columns: {}".format(weight_columns))
 
 # Estimated weight of claim items
 for col in weight_columns:
-    data[col] = data[col] * data["count"]
+    data[col] = data[col] * data["item_quantity"]
 # data["item_weight_lbs"] = data["weight_lbs"] * data["count"]
 # data["item_volume_cf"] = data["volume_cf"] * data["count"]
 # data["item_volume_cy"] = data["volume_cy"] * data["count"]
@@ -53,29 +56,67 @@ truck_data.loc[range_mask, ["lower_truck_weight", "upper_truck_weight"]] = truck
 truck_data.loc[precise_mask, "lower_truck_weight"] = truck_data.loc[precise_mask, "upper_truck_weight"] = truck_data.loc[precise_mask, "item_description"].str.extract(r'\s+(\d)\s+TONS', flags=re.IGNORECASE).values
 
 # Calculate average weight for each truck and multiply by number of trucks
-truck_data["average_truck_weight"] = 0.5*(truck_data["lower_truck_weight"].astype(float) + truck_data["upper_truck_weight"].astype(float))*truck_data["count"]
+truck_data["truck_weight"] = 0.5*(truck_data["lower_truck_weight"].astype(float) + truck_data["upper_truck_weight"].astype(float))*truck_data["item_quantity"]
+truck_data["truck_cost"] = 0
+
+for size in constants.TRUCK_COST_MAP[truck_id]:
+    if not "YARDS" in size:
+        truck_size_mask = truck_data["item_description"].astype(str).str.contains("YARDS", flags=re.IGNORECASE, regex=True)
+        truck_data.loc[~truck_size_mask, "truck_cost"] = constants.TRUCK_COST_MAP[truck_id]["TRUCK"]*truck_data["item_quantity"]
+    else:
+        truck_size_mask = truck_data["item_description"].astype(str).str.contains(size, flags=re.IGNORECASE, regex=True)
+        truck_data.loc[truck_size_mask, "truck_cost"] = constants.TRUCK_COST_MAP[truck_id][size]*truck_data["item_quantity"]
 
 # Assumptions based on data we got for our app
-pickup_data['weight'] = pickup_data['item_quantity'] * 2.4 
+pickup_data["pickup_weight"] = pickup_data["item_quantity"]*2.4 
+pickup_data["pickup_cost"] = pickup_data["item_quantity"]*constants.TRUCK_COST_MAP[pickup_id] 
+
+for id in range(0,10,1):
+    id_mask = (pickup_data["claim_id"] == id)
+    print("==========Claim ID = {}==========".format(id))
+    print(pickup_id)
+    print("   Weights: {}, Total: {}\n   Cost: {}, Total: {}".format(
+                                                                    pickup_data.loc[id_mask, "pickup_weight"].values.tolist(), 
+                                                                    sum(pickup_data.loc[id_mask, "pickup_weight"].values.tolist()),
+                                                                    pickup_data.loc[id_mask, "pickup_cost"].values.tolist(),
+                                                                    sum(pickup_data.loc[id_mask, "pickup_cost"].values.tolist())
+                                                                    ))
+
+    id_mask = (truck_data["claim_id"] == id)
+    print(truck_id)
+    print("   Weights: {}, Total: {}\n   Cost: {}, Total: {}".format(
+                                                                    truck_data.loc[id_mask, "truck_weight"].values.tolist(), 
+                                                                    sum(truck_data.loc[id_mask, "truck_weight"].values.tolist()),
+                                                                    truck_data.loc[id_mask, "truck_cost"].values.tolist(),
+                                                                    sum(truck_data.loc[id_mask, "truck_cost"].values.tolist())
+                                                                    ))
+
 
 # Total weight of all dumpster loads per claim ID
-truck_weight_data = truck_data.groupby("claim_id").agg(total_truck_weight=("average_truck_weight", "sum")).reset_index()
+truck_weight_data = truck_data.groupby("claim_id").agg(total_truck_weight=("truck_weight", "sum"),
+                                                    total_truck_cost=("truck_cost", "sum"),
+                                                    ).reset_index()
 
 # Total weight of all pickup trucks per claim ID
-pickup_weight_data = pickup_data.groupby("claim_id").agg(total_pickup_weight=("weight", "sum")).reset_index()
+pickup_weight_data = pickup_data.groupby("claim_id").agg(total_pickup_weight=("pickup_weight", "sum"),
+                                                        total_pickup_cost=("pickup_cost", "sum"),
+                                                        ).reset_index()
 
 # Merge dumpster loads and pickup trucks data
 all_truck_weight_data = pd.merge(truck_weight_data, pickup_weight_data, how='outer')
 
 # Fill NaNs in total weight with 0
-all_truck_weight_data['total_pickup_weight'] = all_truck_weight_data['total_pickup_weight'].fillna(0)
 all_truck_weight_data['total_truck_weight'] = all_truck_weight_data['total_truck_weight'].fillna(0)
+all_truck_weight_data['total_truck_cost'] = all_truck_weight_data['total_truck_cost'].fillna(0)
+all_truck_weight_data['total_pickup_weight'] = all_truck_weight_data['total_pickup_weight'].fillna(0)
+all_truck_weight_data['total_pickup_cost'] = all_truck_weight_data['total_pickup_cost'].fillna(0)
 
 # Total weight of dumpster loads and pickup trucks
 all_truck_weight_data['total_weight'] = all_truck_weight_data['total_truck_weight'] + all_truck_weight_data['total_pickup_weight']
+all_truck_weight_data['total_cost'] = all_truck_weight_data['total_truck_cost'] + all_truck_weight_data['total_pickup_cost']
 
 # Merge truck data with main claim data
-data = data.merge(all_truck_weight_data[["claim_id", "total_weight"]], on="claim_id", how="left")
+data = data.merge(all_truck_weight_data[["claim_id", "total_weight", "total_cost"]], on="claim_id", how="left")
 
 # Function to calculate fraction of items matched with weights DB
 def matching_fraction(col):
@@ -89,6 +130,7 @@ aggregate_args = {
     "total_claims" : ("item_description", "count"),
     "total_items" : ("count", "sum"),
     "total_truck_weight" : ("total_weight", "last"),
+    "total_truck_cost" : ("total_cost", "last"),
     "ID_matched_fraction" : ("pentatonic_id", matching_fraction),
     "matched_fraction" : ("weights_primary_desc", matching_fraction)
 }
@@ -119,7 +161,7 @@ claim_id_data = data[~truck_data_mask].groupby(["claim_id"]).agg(**aggregate_arg
 db_version = config["data"]["db_version"]
 output_path = "{0}/{1}".format(config["data"]["output_dir"], db_version)
 
-claim_id_data.to_excel("{}/claim_id_weight_comparison_{}_test.xlsx".format(output_path, db_version))
+claim_id_data.to_excel("{}/claim_id_weight_comparison_{}.xlsx".format(output_path, db_version))
 
 hist_colors = list(mcolors.TABLEAU_COLORS)
 line_colors = list(mcolors.BASE_COLORS)
