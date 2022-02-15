@@ -17,7 +17,10 @@ def format_and_regex(expr, special_delimiters=[], permutations=False, is_synonym
         logging.info("format_and_regex: wrong input type!")
         raise Exception("format_and_regex: wrong input type!")
 
-    delimiter="\s"
+    if special_delimiters is not None:
+        delimiter="\s"
+    else:
+        delimiter=""
 
     phrases = expr.split(r"[;]+")
         
@@ -30,8 +33,8 @@ def format_and_regex(expr, special_delimiters=[], permutations=False, is_synonym
         
     for phrase in phrases:
         
-        comma_separated_words = list(set(re.findall(r'([A-Za-z0-9/-]+)(?:[\s]*,[\s]*)', phrase)+\
-                                         re.findall(r'(?:[\s]*,[\s]*)([A-Za-z0-9/]+)', phrase)))
+        # comma_separated_words = list(set(re.findall(r'([a-zA-Z0-9/-]+)(?:[\s]*,[\s]*)', phrase)+\
+        #                                  re.findall(r'(?:[\s]*,[\s]*)([a-zA-Z0-9/-]+)', phrase)))
         
         if permutations:
             expr_split_permutations = itertools.permutations(process_word(phrase, delimiter, special_delimiters, is_synonyms=is_synonyms))
@@ -82,6 +85,9 @@ def synonyms(word):
 def process_word(expr, delimiter, special_delimiters=[], is_synonyms=False):
     
     word_regex = []
+
+    if special_delimiters is None:
+        delimiter = "\s"
 
     words = re.split(delimiter, expr)
     

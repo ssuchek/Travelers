@@ -56,6 +56,7 @@ def main():
                                                                     claim_data.shape[0],
                                                                 ))
         claim_data = claim_data[texas_mask]
+        claim_data = claim_data[claim_data["item_description"].notna()]
     else:
         logging.error("No claims are located in Texas")
         raise Exception("Claim processing error due to exception: no claims are located in Texas")

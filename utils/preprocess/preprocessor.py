@@ -226,13 +226,15 @@ class PreprocessTransformation():
     def remove_punctuation(col):
         """
         Replace with a single whitespace:
-        - All non-alphabetical and non-numerical symbols except "_", "/", ";","-"
+        - All non-alphabetical and non-numerical symbols except:
+            -- Part of descriptions:    "_", "/", "-", "&"
+            -- Indicator of OR logic:   ";"
         - Multiple whitespaces
         - All parentheses
         :param col                          an input column Series object
         """
         col_copy = col.copy()
-        col_copy = col_copy.astype(str).str.replace(r"[^a-zA-Z0-9\_\/\;\-\s]+", " ", regex=True)
+        col_copy = col_copy.astype(str).str.replace(r"[^a-zA-Z0-9\_\/\;\-\&\s]+", " ", regex=True)
         col_copy = col_copy.astype(str).str.replace(r"[\(\[\{\}\)\]]+", " ", regex=True)
         return col_copy
 
@@ -282,14 +284,17 @@ class PreprocessTransformation():
 
     @staticmethod
     @remove_spaces_and_strip
-    def remove_one_letter_non_alphanumeric_words(col):
+    def remove_one_letter_non_alphanumeric_words(col, exceptions=["&"]):
         """
         Remove single letter non-alphanumeric words
         :param col                          an input column Series object
         """
         col_copy = col.copy()
         col_copy = col_copy.str.split(" ")
-        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if len(word) > 1 or (len(word) == 1 and word.isalnum())])
+        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if len(word) > 1 \
+                                                                            or (len(exceptions) > 0 and word in exceptions) \
+                                                                            or (len(word) == 1 and word.isalnum())]
+                                                                        )
         col_copy = col_copy.str.join(" ")
         return col_copy
 

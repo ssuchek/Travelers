@@ -1,16 +1,12 @@
-from cmath import log
 import collections
-from distutils.log import error
 import ijson
 import itertools
-import json
 import logging
 import os
 import re
-from nltk.corpus.reader.bracket_parse import WORD
 import requests
 import shutil
-from utils.logging.helpers import log_and_warn
+import statistics
 
 import numpy as np
 import pandas as pd
@@ -28,7 +24,8 @@ from utils.preprocess import BASIC_PREPROCESS, CATEGORIES_WORD_PREPROCESS
 from utils.preprocess import WEIGHTS_PREPROCESS, WEIGHTS_WORD_PREPROCESS, WEIGHTS_WORD_FREQUENCY_PREPROCESS
 from utils.preprocess.dataframe import aggregate_col_values_to_comma_list
 
-from utils.helpers import format_and_regex, pluralize
+from utils.logging.helpers import log_and_warn
+from utils.helpers import format_and_regex
 
 
 def read_if_exist_decorator(get_data):
@@ -183,6 +180,82 @@ class ClaimDataLoader(object):
 
             regex_keep_claims_expr = format_and_regex(regex_keep_claims)
 
+            for stop_claim in constants.STOP_CLAIM_IDS:
+                logging.info("Processing stop claim ID {}...".format(stop_claim))
+
+                regex_stop_claims_expr = format_and_regex(stop_claim)
+
+                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+
+                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+
+                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)  
+
+                stop_claims_mask &= ~keep_mask   
+
+                log_and_warn(
+                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                                                                        data.shape[0],
+                                                                                        stop_claim
+                                                                                    ))
+
+                roofing_mask = data["subcategory_prev_processed"].str.contains("roofing", 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+    
+                stop_claim_ids = data.loc[stop_claims_mask & roofing_mask, "claim_id"].unique().tolist()
+                remove_mask = data["claim_id"].isin(stop_claim_ids) & roofing_mask
+
+                log_and_warn("Total {}/{} roofing claims are filtered out according to {}".format(remove_mask.sum(),
+                                                                                                    data.shape[0],
+                                                                                                    stop_claim
+                                                                                                ))
+
+                if remove_mask.sum() > 0:
+                    data = data[~remove_mask]
+
+            for stop_claim in constants.STOP_CLAIMS_CONTAINING:
+                logging.info("Processing stop claim {}...".format(stop_claim))
+
+                regex_stop_claims_expr = format_and_regex(stop_claim, special_delimiters=None)
+
+                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+
+                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+
+                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                            data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+
+                stop_claims_mask &= ~keep_mask   
+
+                log_and_warn(
+                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                                                                        data.shape[0],
+                                                                                        stop_claim
+                                                                                    ))
+
+                if stop_claims_mask.sum() > 0:
+                    data = data[~stop_claims_mask]
+
             for stop_claim in constants.ALL_STOP_CLAIMS:
                 logging.info("Processing stop claim {}...".format(stop_claim))
 
@@ -197,21 +270,21 @@ class ClaimDataLoader(object):
                                                                         flags=re.IGNORECASE,
                                                                         regex=True)
 
-                
+                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                            data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)   
+
+                stop_claims_mask &= ~keep_mask   
+
                 log_and_warn(
                         "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
                                                                                         data.shape[0],
                                                                                         stop_claim
                                                                                     ))
 
-                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)   
-
-                stop_claims_mask &= ~keep_mask                                                                                                                     
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
 
@@ -229,19 +302,20 @@ class ClaimDataLoader(object):
                                                                         flags=re.IGNORECASE,
                                                                         regex=True)
 
-                log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
-
                 keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
                                                                         flags=re.IGNORECASE,
                                                                         regex=True) | \
                         data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
                                                                         flags=re.IGNORECASE,
                                                                         regex=True)        
-                stop_claims_mask &= ~keep_mask                                                                                                                     
+                stop_claims_mask &= ~keep_mask       
+
+                log_and_warn(
+                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                                                                        data.shape[0],
+                                                                                        stop_claim
+                                                                                    ))
+
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
 
@@ -256,24 +330,47 @@ class ClaimDataLoader(object):
                                                                         flags=re.IGNORECASE,
                                                                         regex=True)
 
-                log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
-
                 keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
                                                                         flags=re.IGNORECASE,
                                                                         regex=True) | \
                         data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
                                                                         flags=re.IGNORECASE,
                                                                         regex=True)        
-                stop_claims_mask &= ~keep_mask                                                                                                                     
+                stop_claims_mask &= ~keep_mask
+
+                log_and_warn(
+                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                                                                        data.shape[0],
+                                                                                        stop_claim
+                                                                                    ))
+
+
                 if stop_claims_mask.sum() > 0:
-                    data = data[~stop_claims_mask]    
+                    data = data[~stop_claims_mask]   
+
+            logging.info("Processing stop activities...")
+
+            stop_activities_mask = data["item_description_processed"].isin(constants.STOP_ACTIVITIES)
+
+            keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)  
+
+            stop_activities_mask &= ~keep_mask
 
             log_and_warn(
-                        "Total {}/{} claims are filtered out according to stop categories and claims".format(total_claims_start-data.shape[0],
+                        "Total {}/{} claims are filtered out according to stop activities".format(stop_activities_mask.sum(),
+                                                                                        data.shape[0]
+                                                                                    ))
+
+            if stop_activities_mask.sum() > 0:
+                data = data[~stop_activities_mask]                                                                        
+    
+            log_and_warn(
+                        "Total {}/{} claims are filtered out according to all stop categories, activites and claims".format(total_claims_start-data.shape[0],
                                                                                         total_claims_start
                                                                                     ))
 
@@ -741,19 +838,8 @@ class ClaimDataLoader(object):
                 word_preprocessor = Preprocessor(transformations)
                 data = word_preprocessor.calculate(data)
 
-            # unit_columns = ["weight_lbs", "weight_ustons", "volume_cf", "volume_cy"]
-
-            # max_unit_columns = ["max_"+col for col in unit_columns]
-
-            # all_unit_columns = unit_columns + max_unit_columns
-
             data[["pentatonic_id", "weights_primary_desc", "unit"]] = ""
-            #data[["pentatonic_id", "weights_primary_desc", "unit", "max_unit", "weights_unit"]] = ""
-            # data[all_unit_columns] = 0
-            # data[unit_columns] = 0
-
-            # unit_columns = unit_columns + ["unit"]
-            # max_unit_columns = max_unit_columns + ["max_unit"]
+            data[["total_descriptions_matched", "total_words_matched"]] = 0
 
             total_full_desc = len(weight_descriptions)
 
@@ -780,12 +866,17 @@ class ClaimDataLoader(object):
                 log_and_warn("Found no category descriptions in claims DB!".format(total_category_desc))
 
             chunk_size = 3
+            
             for desc in weight_descriptions:
 
                 matched_mask = True
                 matched_item_desc = item_desc.copy()
                 matched_category_desc = category_desc.copy()
+                total_descriptions_matched = 0
+                total_words_matched = 0
+
                 logging.info("=================================================")
+
                 for key in desc:
 
                     if desc[key]:
@@ -794,11 +885,14 @@ class ClaimDataLoader(object):
 
                         if ";" not in desc[key]:
                             desc_split = [" ".join(desc[key].split()[i:i+chunk_size]) for i in range(0, len(desc[key].split()), chunk_size)]
+                            nwords = len([phrase for phrase in desc[key].split()])
 
                             if len(desc[key].split()) > 3:
                                 logging.info("Length of '{}' is too long for regex search. Splitting in chunks".format(desc[key]))
                         else:
                             desc_split = [desc[key]]
+                            phrases = [phrase.split() for phrase in desc[key].split(";")]
+                            nwords = max([len(phrase) for phrase in phrases])
 
                         for desc_chunk in desc_split:     
 
@@ -813,6 +907,9 @@ class ClaimDataLoader(object):
 
                             if len(matched_item_desc) == 0 and len(matched_category_desc) == 0:
                                 break
+
+                        total_descriptions_matched += 1
+                        total_words_matched += nwords
 
                         matched_mask &= (weights[key] == desc[key])
 
@@ -829,7 +926,7 @@ class ClaimDataLoader(object):
                                                                                                 desc[key]
                                                                                                     ))
 
-                        if key == "primary_desc_processed" and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
+                        if "primary_desc" in key and (len(matched_item_desc) > 0 or len(matched_category_desc) > 0):
                             weights.loc[matched_mask, "primary_matching"] = True
 
                             regex_mask = (data["item_description_processed"].isin(matched_item_desc) | data["subcategory_prev_processed"].isin(matched_category_desc))
@@ -860,6 +957,11 @@ class ClaimDataLoader(object):
                 valid_category_matching = (total_matched_category_desc > 0 and total_matched_category_desc < total_category_desc)
 
                 if valid_item_matching or valid_category_matching:
+
+                    categories_matched_mask = (data["total_descriptions_matched"] < total_descriptions_matched) | \
+                                           (data["total_descriptions_matched"] == total_descriptions_matched) & (data["total_words_matched"] < total_words_matched)
+                    words_matched_mask = (data["total_descriptions_matched"] == total_descriptions_matched) & (data["total_words_matched"] == total_words_matched)
+
                     weights.loc[matched_mask, "full_matching"] = True
 
                     regex_mask = (data["item_description_processed"].isin(matched_item_desc) | data["subcategory_prev_processed"].isin(matched_category_desc))
@@ -872,7 +974,14 @@ class ClaimDataLoader(object):
                         regex_mask &= (data["item_unit_cd"] == weights_unit)
 
                     if pentatonic_id:
-                        data = self.add_tag(data, regex_mask, "pentatonic_id", pentatonic_id)
+                        if words_matched_mask.sum() > 0:
+                            data = self.add_tag(data, regex_mask & words_matched_mask, "pentatonic_id", pentatonic_id)
+                        
+                        if categories_matched_mask.sum() > 0:
+                            data = self.replace_tag(data, regex_mask & categories_matched_mask, "pentatonic_id", pentatonic_id)
+                            data.loc[regex_mask & categories_matched_mask, "total_descriptions_matched"] = total_descriptions_matched
+                            data.loc[regex_mask & categories_matched_mask, "total_words_matched"] = total_words_matched
+                            
                         data.loc[regex_mask, "unit"] = weights_unit
 
                         # for col in unit_columns:
@@ -908,22 +1017,44 @@ class ClaimDataLoader(object):
                             desc[key]
                         ))
 
+            truck_claims = "dumpster load;pickup truck load"
+            truck_claims_expr = format_and_regex(truck_claims)
+
+            truck_mask = data["subcategory_prev_processed"].astype(str).str.contains(truck_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                        data["item_description_processed"].astype(str).str.contains(truck_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)   
+
             id_matched_mask = (data["pentatonic_id"].notna() & (data["pentatonic_id"] != ""))
             primary_matched_mask = (data["weights_primary_desc"].notna() & (data["weights_primary_desc"] != ""))
             only_primary_matched_mask = ~id_matched_mask & primary_matched_mask
 
-            if only_primary_matched_mask.sum() > 0:
+            def get_phrase_max_length(expr):
+                
+                tags = expr.split(",")
+                max_length = max([len(t.split()) for t in tags])
+
+                new_expr = ",".join(t for t in tags if len(t.split()) == max_length)
+
+                return new_expr
+
+            data.loc[only_primary_matched_mask, "weights_primary_desc"] = data.loc[only_primary_matched_mask, "weights_primary_desc"]\
+                                                                            .apply(lambda x: get_phrase_max_length(x))
+
+            if (only_primary_matched_mask & ~truck_mask).sum() > 0:
                 log_and_warn(
                         "Total {}/{} claims were matched by primary description but not Pentatonic ID...".format(
-                                                                                                only_primary_matched_mask.sum(),
-                                                                                                data.shape[0]
+                                                                                (only_primary_matched_mask & ~truck_mask).sum(),
+                                                                                data.shape[0]
                         ))
 
-            if id_matched_mask.sum() > 0:
+            if (id_matched_mask & ~truck_mask).sum() > 0:
                 log_and_warn(
                         "Total {}/{} claims were matched by Pentatonic ID...".format(
-                                                                                                id_matched_mask.sum(),
-                                                                                                data.shape[0]
+                                                                                (id_matched_mask & ~truck_mask).sum(),
+                                                                                data.shape[0]
                         ))
 
             # id_unmatched_mask = (data["pentatonic_id"].isna() | (data["pentatonic_id"] == ""))
