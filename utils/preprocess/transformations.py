@@ -20,6 +20,14 @@ CATEGORIES_WORD_PREPROCESS = [
     PreprocessTransformation("item_description_processed", "item_description_processed", "remove_one_letter_non_alphanumeric_words")
 ]
 
+ACTIVITIES_WORD_PREPROCESS = [
+    PreprocessTransformation("item_description", "item_description_processed", "identity"),
+    PreprocessTransformation("item_description_processed", "item_description_processed", "remove_punctuation"),
+    # PreprocessTransformation("item_description_processed", "item_description_processed", "remove_stop_words"),
+    PreprocessTransformation("item_description_processed", "item_description_processed", "remove_verbs"),
+    PreprocessTransformation("item_description_processed", "item_description_processed", "remove_one_letter_non_alphanumeric_words")
+]
+
 WEIGHTS_PREPROCESS = [
     PreprocessTransformation("waste_type", "waste_type", "fill_na_with_value", ""),
     PreprocessTransformation("primary_desc", "primary_desc", "fill_na_with_value", ""),

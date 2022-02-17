@@ -1,4 +1,5 @@
 from .preprocessor import Preprocessor, PreprocessTransformation
 from .transformations import BASIC_PREPROCESS, CATEGORIES_WORD_PREPROCESS
+from .transformations import ACTIVITIES_WORD_PREPROCESS
 from .transformations import WEIGHTS_PREPROCESS, WEIGHTS_WORD_PREPROCESS
 from .transformations import WEIGHTS_WORD_FREQUENCY_PREPROCESS

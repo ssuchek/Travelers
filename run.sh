@@ -12,7 +12,7 @@
 #     rm figs/*
 # fi
 
-VERSION="v0.6.11"
+VERSION="v0.6.15"
 # MATCHING_FILES="data/output/revised/single_year/$VERSION/"
 # if ls $MATCHING_FILES* &> /dev/null; then
 #     rm $MATCHING_FILES*
@@ -29,6 +29,6 @@ VERSION="v0.6.11"
 # fi
 
 # Run script
-.venv/bin/python categories.py
-.venv/bin/python calculate_weights.py
+# .venv/bin/python categories.py
+# .venv/bin/python calculate_weights.py
 .venv/bin/python claim_id_weight_comparison.py

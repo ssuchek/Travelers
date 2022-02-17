@@ -23,34 +23,63 @@ data = pd.read_csv(filepath)
 
 # Data for dumpster loads
 truck_id = "DUMPSTER LOAD"
+pickup_id = "PICKUP TRUCK LOAD"
+axle_id = "AXLE DUMP"
 
 # Keep claim IDs with only dumpster load collection method
 
-no_dumpster_load_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
-                        (data["item_description"].str.contains(truck_id, flags=re.IGNORECASE, regex=True) == False)
-no_dumpster_load_ids = data.loc[no_dumpster_load_mask, "claim_id"].unique().tolist()
+# no_dumpster_load_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
+#                         (data["item_description"].str.contains(truck_id, flags=re.IGNORECASE, regex=True) == False)
+# no_dumpster_load_ids = data.loc[no_dumpster_load_mask, "claim_id"].unique().tolist()
 
 total_ids_initial = len(data["claim_id"].unique().tolist())
 
-data = data[~data["claim_id"].isin(no_dumpster_load_ids)]
+# data = data[~data["claim_id"].isin(no_dumpster_load_ids)]
 
-print("Total {}/{} claim IDs contain only dumpster load collection method".format(len(no_dumpster_load_ids),
+# print("Total {}/{} claim IDs contain only dumpster load collection method".format(total_ids_initial-len(no_dumpster_load_ids),
+#                                                                                  total_ids_initial)
+#      )
+
+# truck_data = data[truck_mask].copy()
+
+#Data for pickup trucks loads
+pickup_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
+            data["item_description"].str.contains(pickup_id, flags=re.IGNORECASE, regex=True)
+# pickup_data = data[pickup_mask].copy()
+
+axle_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
+            data["item_description"].str.contains(axle_id, flags=re.IGNORECASE, regex=True)
+
+pickup_ids = data.loc[pickup_mask, "claim_id"].unique().tolist()
+axle_ids = data.loc[axle_mask, "claim_id"].unique().tolist()
+
+print("Total {}/{} claim IDs contain pickup truck collection method".format(len(pickup_ids),
+                                                                                 total_ids_initial)
+     )
+
+print("Total {}/{} claim IDs contain axle dump collection method".format(len(axle_ids),
+                                                                                 total_ids_initial)
+     )
+
+pickup_no_axle_ids = list(set(pickup_ids).difference(axle_ids))
+
+data = data[data["claim_id"].isin(pickup_no_axle_ids)]
+
+print("Total {}/{} claim IDs contain pickup truck collection method (no axle dumps)".format(len(pickup_no_axle_ids),
                                                                                  total_ids_initial)
      )
 
 truck_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
             data["item_description"].str.contains(truck_id, flags=re.IGNORECASE, regex=True)
-truck_data = data[truck_mask].copy()
 
-# Data for pickup trucks loads
-pickup_id = "PICKUP TRUCK LOAD"
 pickup_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
             data["item_description"].str.contains(pickup_id, flags=re.IGNORECASE, regex=True)
-pickup_data = data[pickup_mask].copy()
 
-axle_id = "AXLE DUMP"
 axle_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
             data["item_description"].str.contains(axle_id, flags=re.IGNORECASE, regex=True)
+
+truck_data = data[truck_mask].copy()
+pickup_data = data[pickup_mask].copy()
 
 # Mask for items associated with valid pentatonic IDs
 id_matched_mask = data["pentatonic_id"].notna() & (data["pentatonic_id"] != "")
@@ -119,6 +148,8 @@ truck_weight_data = truck_data.groupby("claim_id").agg(total_truck_weight=("truc
 
 # Total weight of all pickup trucks per claim ID
 pickup_weight_data = pickup_data.groupby("claim_id").agg(total_pickup_weight=("pickup_weight", "sum"),
+                                                        all_pickup_weights=("pickup_weight", to_list),
+                                                        all_pickup_qty=("item_quantity", to_list),
                                                         total_pickup_cost=("pickup_cost", "sum"),
                                                         ).reset_index()
 # Merge dumpster loads and pickup trucks data
@@ -138,7 +169,7 @@ truck_data_mask = (truck_mask | pickup_mask | axle_mask)
 data = data[~truck_data_mask]
 
 # Merge truck data with main claim data
-data = data.merge(all_truck_weight_data[["claim_id", "total_weight", "all_truck_weights", "all_truck_qty", "total_cost", ]], on="claim_id", how="left")
+data = data.merge(all_truck_weight_data[["claim_id", "total_weight", "all_truck_weights", "all_truck_qty", "all_pickup_weights", "all_pickup_qty", "total_cost", ]], on="claim_id", how="left")
 
 # Function to calculate fraction of items matched with weights DB
 def total_matching_fraction(col, ext_mask=None):
@@ -168,6 +199,8 @@ aggregate_args = {
     "total_truck_weight" : ("total_weight", "last"),
     "truck_weights" : ("all_truck_weights", "last"),
     "truck_qty" : ("all_truck_qty", "last"),
+    "pickup_weights" : ("all_pickup_weights", "last"),
+    "pickup_qty" : ("all_pickup_qty", "last"),
     "total_truck_cost" : ("total_cost", "last"),
     "total_id_matching_fraction" : ("pentatonic_id", total_matching_fraction),
     "single_id_matching_fraction" : ("pentatonic_id", single_matching_fraction),
@@ -213,7 +246,7 @@ suffixes = [col.partition("ustons_")[-1] for col in claim_id_data.columns if col
 columns = ['claim_id', 'zip', 'total_claims', 'total_items', 'total_truck_weight', 'total_truck_cost', 
            'total_id_matching_fraction', 'single_id_matching_fraction', 'multiple_id_matching_fraction', 
            'primary_matching_fraction']
-# claim_id_data.to_excel("{}/claim_id_weight_comparison_{}_only_dumpster_loads.xlsx".format(output_path, db_version))
+# claim_id_data.to_excel("{}/claim_id_weight_comparison_{}_pickup_trucks.xlsx".format(output_path, db_version))
 
 
 prices_data = pd.read_csv("data/collection_methods.csv")
@@ -349,12 +382,12 @@ for col in weight_columns:
 
 suffixes = [col.partition("ustons_")[-1] for col in claim_id_data.columns if col.startswith("weight_estimation_ustons")]
 
-columns = ['claim_id', 'zip', 'total_claims', 'total_items', 'total_truck_weight', 'truck_weights', 'truck_qty',
+columns = ['claim_id', 'zip', 'total_claims', 'total_items', 'total_truck_weight', 'truck_weights', 'truck_qty', 'pickup_weights', 'pickup_qty',
            'total_truck_cost', 
            'total_id_matching_fraction', 'single_id_matching_fraction', 'multiple_id_matching_fraction', 
            'primary_matching_fraction']
 
-excel_name = "{}/claim_id_weight_comparison_{}_only_dumpster_loads.xlsx".format(output_path, db_version)
+excel_name = "{}/claim_id_weight_comparison_{}_pickup_trucks.xlsx".format(output_path, db_version)
 
 plot_mask = (claim_id_data["total_truck_cost"] > 0) & (claim_id_data["estimated_cost_median_median"] > 0) 
     
@@ -398,7 +431,7 @@ final_data = claim_id_data[valid_weight_mask]
 columns = ['claim_id', 'date', 'total_id_matching_fraction', 'total_items', 
            'total_truck_weight', 'truck_weights', 'truck_qty', 'total_truck_cost']
 
-excel_name = "{}/final_only_positive_claim_id_weight_comparison_{}_only_dumpster_loads.xlsx".format(output_path, db_version)
+excel_name = "{}/final_only_positive_claim_id_weight_comparison_{}_pickup_trucks.xlsx".format(output_path, db_version)
 
 plot_mask = (claim_id_data["total_truck_cost"] > 0) & (claim_id_data["estimated_cost_median_median"] > 0) 
     
@@ -499,7 +532,7 @@ fig.set_size_inches(18.5, 10.5, forward=True)
 plt.xlim(-50,50)
 
 file_label = "_{}t".format(abs(down_thres)) if down_thres is not None else ""
-plt.savefig('{}/excessive_truck_weight_frequency_only_dumpster_loads{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
+plt.savefig('{}/excessive_truck_weight_frequency_pickup_trucks{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
 
 
 
@@ -574,7 +607,7 @@ fig.set_size_inches(18.5, 10.5, forward=True)
 plt.xlim(-50,50)
 
 file_label = "_{}t".format(abs(down_thres)) if down_thres is not None else ""
-plt.savefig('{}/excessive_truck_weight_frequency_only_dumpster_loads_IDmatching{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
+plt.savefig('{}/excessive_truck_weight_frequency_pickup_trucks_IDmatching{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
 
 
 
@@ -622,7 +655,7 @@ fig.set_size_inches(18.5, 10.5, forward=True)
 
 plt.xlim(-100,100)
 
-plt.savefig('{}/relative_excessive_truck_cost_frequency_only_dumpster_loads{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
+plt.savefig('{}/relative_excessive_truck_cost_frequency_pickup_trucks{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
 
 
 

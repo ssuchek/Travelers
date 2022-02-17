@@ -21,6 +21,7 @@ from config import config
 
 from utils.preprocess import Preprocessor, PreprocessTransformation
 from utils.preprocess import BASIC_PREPROCESS, CATEGORIES_WORD_PREPROCESS
+from utils.preprocess import ACTIVITIES_WORD_PREPROCESS
 from utils.preprocess import WEIGHTS_PREPROCESS, WEIGHTS_WORD_PREPROCESS, WEIGHTS_WORD_FREQUENCY_PREPROCESS
 from utils.preprocess.dataframe import aggregate_col_values_to_comma_list
 
@@ -180,8 +181,10 @@ class ClaimDataLoader(object):
 
             regex_keep_claims_expr = format_and_regex(regex_keep_claims)
 
+            logging.info("Processing {} stop claim IDs...".format(len(constants.STOP_CLAIM_IDS)))
+
             for stop_claim in constants.STOP_CLAIM_IDS:
-                logging.info("Processing stop claim ID {}...".format(stop_claim))
+                logging.info("Processing stop item {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim)
 
@@ -224,8 +227,10 @@ class ClaimDataLoader(object):
                 if remove_mask.sum() > 0:
                     data = data[~remove_mask]
 
+            logging.info("Processing stop claims containing {} substrings...".format(len(constants.STOP_CLAIMS_CONTAINING)))
+
             for stop_claim in constants.STOP_CLAIMS_CONTAINING:
-                logging.info("Processing stop claim {}...".format(stop_claim))
+                logging.info("Processing stop item {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim, special_delimiters=None)
 
@@ -256,8 +261,39 @@ class ClaimDataLoader(object):
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
 
+            logging.info("Processing stop claims precisely matching {} items...".format(len(constants.STOP_CLAIMS_PRECISE_MATCHING)))
+
+            for stop_claim in constants.STOP_CLAIMS_PRECISE_MATCHING:
+                logging.info("Processing stop item {}...".format(stop_claim))
+
+                regex_stop_claims_expr = "(?i:{})".format(stop_claim)
+
+                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+
+                stop_claims_mask = data["item_description_processed"].astype(str).str.match(regex_stop_claims_expr)
+
+                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True) | \
+                            data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                                                                        flags=re.IGNORECASE,
+                                                                        regex=True)
+
+                stop_claims_mask &= ~keep_mask   
+
+                log_and_warn(
+                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                                                                        data.shape[0],
+                                                                                        stop_claim
+                                                                                    ))
+
+                if stop_claims_mask.sum() > 0:
+                    data = data[~stop_claims_mask]
+
+            logging.info("Processing stop claims containing {} patterns...".format(len(constants.ALL_STOP_CLAIMS)))
+
             for stop_claim in constants.ALL_STOP_CLAIMS:
-                logging.info("Processing stop claim {}...".format(stop_claim))
+                logging.info("Processing stop item {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim)
 
@@ -287,6 +323,8 @@ class ClaimDataLoader(object):
 
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
+
+            logging.info("Processing {} stop categories...".format(len(constants.STOP_CATEGORIES)))
 
             for stop_claim in constants.STOP_CATEGORIES:
                 logging.info("Processing stop category {}...".format(stop_claim))
@@ -319,8 +357,10 @@ class ClaimDataLoader(object):
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
 
+            logging.info("Processing {} stop reasons...".format(len(constants.STOP_REASON_DESC)))
+
             for stop_claim in constants.STOP_REASON_DESC:
-                logging.info("Processing stop category {}...".format(stop_claim))
+                logging.info("Processing stop reason {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim)
 
@@ -348,9 +388,16 @@ class ClaimDataLoader(object):
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]   
 
-            logging.info("Processing stop activities...")
+            logging.info("Processing {} stop activities...".format(len(constants.STOP_ACTIVITIES)))
 
-            stop_activities_mask = data["item_description_processed"].isin(constants.STOP_ACTIVITIES)
+            # Need to apply the same transformation for stop activities as for claim data
+
+            activities_data = pd.DataFrame(constants.STOP_ACTIVITIES, columns = ["item_description"])
+            activities_preprocessor = Preprocessor(ACTIVITIES_WORD_PREPROCESS)
+            activities_data = activities_preprocessor.calculate(activities_data)
+            stop_activities = activities_data["item_description_processed"].values.tolist()
+
+            stop_activities_mask = data["item_description_processed"].isin(stop_activities)
 
             keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
                                                                         flags=re.IGNORECASE,
@@ -981,7 +1028,7 @@ class ClaimDataLoader(object):
                             data = self.replace_tag(data, regex_mask & categories_matched_mask, "pentatonic_id", pentatonic_id)
                             data.loc[regex_mask & categories_matched_mask, "total_descriptions_matched"] = total_descriptions_matched
                             data.loc[regex_mask & categories_matched_mask, "total_words_matched"] = total_words_matched
-                            
+
                         data.loc[regex_mask, "unit"] = weights_unit
 
                         # for col in unit_columns:

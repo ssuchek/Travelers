@@ -45,23 +45,25 @@ FREQUENCY_STOP_WORDS = STOP_WORDS + [
 STOP_CLAIMS = [
                 "& finish",
                 "add", "adhesive", "and finish", "applied", "appearance allowance", "assembly",
-                "barrier", "bid item", "block pad furniture",
+                "barrier", "bid item", "block pad furniture", "buff",
                 "calibration", "charge", "civil unrest", "clean", "cleaning", "clean-out", "cleanout", "clearance inspection", "coating", "comp", "cont", "content manipulation",
                 "debris chute", "demolish/remove", "detach reset", "dust control barrier",
                 "finish", "fill", "flashing", "floor prot", "floor protection", "furniture repair", 
                 "equipment wiring", "evaluate",
                 "installation", "installed", "installer",
                 "labor", "landfil fees", "loading",
-                "mask", "molding", "move",
+                "mask", "molding", "move", "mulching",
                 "open and close", "operator", 
-                "paint", "painting", "permits", "per day", "per invoice", "per month", "per week", "plumbing fixture", "preparation", "primer", "provide",
-                "recharge", "regrout", "reinforced", "remediation", "remove", "removal", "repair", "replace", "reset", "reskin", "restore repair", "return", "rewire",
+                "paint", "painting", "permits", "per day", "per invoice", "per month", "per week", "plumbing fixture", "polish", "preparation", "primer", "prep", "protect", "provide",
+                "recharge", "refacing", "reglaze", "regrout", "reinforced", "remediation", "remove", "removal", "repair", "replace", "reset", "rescreen", "reskin", "restore repair", "return", "rewire",
                 "sand", "scarify", "seal", "sealer", "software", "spray",
-                "tape joint", "tape joint/repair", "tear", "test", "texture", "treatment", "tree",
+                "tape joint", "tape joint/repair", "tear", "test", "texture", "tongue groove", "treatment", "tree",
                 "wash"
             ]
 
 STOP_CLAIMS_CONTAINING = ["re-"]
+
+STOP_CLAIMS_PRECISE_MATCHING = ["plumbing"]
 
 STOP_SMALL_ITEM_CLAIMS = ["fabric softener", "knick knacks"]
 STOP_DONATED_REPURPOSED_CLAIMS = ["laptop cover", "camera bag", "artwork"]
@@ -85,7 +87,12 @@ STOP_REASON_DESC = [
 ]
 
 STOP_ACTIVITIES = [
+    'ASPHALT STARTER - PEEL AND STICK',
+    'CONCRETE CUTTING - SLAB (PER LF PER INCH OF SAW DEPTH)',
+    'CONCRETE FLOOR SAWING - 4" SLAB',
     'CONCRETE SEALER - BRUSH OR SPRAY APPLIED',
+    'DUCTWORK - ADD-ON FOR CONFINED SPACES - FLEXIBLE',
+    'EPOXY CRACK AND JOINT FILLER (PER LF OF CRACK)',
     'EXTERIOR LIGHT FIXTURE',
     'EXTERIOR LIGHT FIXTURE - HIGH GRADE',
     'EXTERIOR LIGHT FIXTURE - STANDARD GRADE',
@@ -144,11 +151,13 @@ STOP_ACTIVITIES = [
     'RECESSED LIGHT FIXTURE - TRIM ONLY',
     'RECESSED LIGHT FIXTURE - TRIM ONLY - HIGH GRADE',
     'ROUGH IN PLUMBING - PER FIXTURE',
-    "SCARF, SHAWL & WRAP - LADIES' - HIGH GRADE"
+    "SCARF, SHAWL & WRAP - LADIES' - HIGH GRADE",
+    'SEAM CARPET',
     'SHOWER LIGHT - WATERPROOF FIXTURE',
     'SPOT LIGHT FIXTURE - SINGLE',
     'SPOT LIGHT FIXTURE - DOUBLE',
     'SPOT LIGHT FIXTURE - DOUBLE - W/MOTION SENSOR',
+    'TRACK LIGHTING - TRACK ONLY',
     'WRAP CUSTOM FASCIA WITH ALUMINUM (PER LF)', 
     'WRAP WOOD DOOR FRAME & TRIM WITH ALUMINUM (PER LF)',
     'WRAP WOOD GARAGE DOOR FRAME & TRIM WITH ALUMINUM (PER LF)',
