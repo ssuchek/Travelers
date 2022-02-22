@@ -256,17 +256,49 @@ class PreprocessTransformation():
 
     @staticmethod
     @remove_spaces_and_strip
-    def remove_non_alphanumeric_words(col):
+    def remove_punctuation(col):
         """
-        Replace words containing non-alphabetical symbols by whitespace
-        Default patterns:  ENGLISH_STOP_WORDS
-        :param col                          an input column Series object
-        :param stopwords                    a tuple of genre to replace
+            Replace with a single whitespace:
+            - All non-alphabetical and non-numerical symbols except:
+                -- Part of descriptions:    "_", "/", "-", "&"
+                -- Indicator of OR logic:   ";"
+            - Multiple whitespaces
+            - All parentheses
+            :param col                          an input column Series object
         """
         col_copy = col.copy()
+        col_copy = col_copy.astype(str).str.replace(r"[^a-zA-Z0-9\_\/\;\-\&\s]+", " ", regex=True)
+        col_copy = col_copy.astype(str).str.replace(r"[\(\[\{\}\)\]]+", " ", regex=True)
+        
+        def remove_special_symbols_no_letters(row):
+            """
+                Replace with a single whitespace:
+                - All non-numerical symbols in words without letters except:
+                    -- Part of descriptions:    "/", "&"
+                    -- Indicator of OR logic:   ";"
+                - All non-alphanumerical symbols at the beginning and at the end of words
+                - All "/" symbols in alphabetic words
+                :param row                       an input list of words
+            """
+            
+            new_row = []
+            for word in row:
+                if not word.lower().islower():
+                    word = re.sub('[^0-9\;\&\/]+', ' ', word).strip()
+                else:
+                    word = re.sub('[\/]+', ' ', word).strip()
+
+                if re.search('[a-zA-Z0-9]', word):   
+                    word = re.sub(r"^\W+|\W+$", "", word)
+                    
+                new_row.append(word)
+                
+            return new_row
+    
         col_copy = col_copy.str.split(" ")
-        col_copy = col_copy.apply(lambda row: [word.strip() for word in row if re.sub('[/-]', '', word).isalnum()])
+        col_copy = col_copy.apply(lambda row: remove_special_symbols_no_letters(row))
         col_copy = col_copy.str.join(" ")
+    
         return col_copy
 
     @staticmethod

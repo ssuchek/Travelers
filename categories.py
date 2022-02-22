@@ -1,8 +1,7 @@
-from genericpath import exists
-import os
 import inflect
 import json
 import logging
+import os
 
 import nltk
 

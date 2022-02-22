@@ -46,18 +46,22 @@ STOP_CLAIMS = [
                 "& finish",
                 "add", "adhesive", "and finish", "applied", "appearance allowance", "assembly",
                 "barrier", "bid item", "block pad furniture", "buff",
-                "calibration", "charge", "civil unrest", "clean", "cleaning", "clean-out", "cleanout", "clearance inspection", "coating", "comp", "cont", "content manipulation",
-                "debris chute", "demolish/remove", "detach reset", "dust control barrier",
+                "calibration", "charge", "civil unrest", "clean", "cleaning", "clean-out", "cleanout", 
+                "clearance inspection", "coating", "comp", "cont", "content manipulation",
+                "debris chute", "demolish remove", "detach reset", "dust control barrier",
                 "finish", "fill", "flashing", "floor prot", "floor protection", "furniture repair", 
                 "equipment wiring", "evaluate",
+                "hot mopped",
                 "installation", "installed", "installer",
                 "labor", "landfil fees", "loading",
-                "mask", "molding", "move", "mulching",
+                "mask", "modified", "molding", "move", "mulching",
                 "open and close", "operator", 
-                "paint", "painting", "permits", "per day", "per invoice", "per month", "per week", "plumbing fixture", "polish", "preparation", "primer", "prep", "protect", "provide",
-                "recharge", "refacing", "reglaze", "regrout", "reinforced", "remediation", "remove", "removal", "repair", "replace", "reset", "rescreen", "reskin", "restore repair", "return", "rewire",
-                "sand", "scarify", "seal", "sealer", "software", "spray",
-                "tape joint", "tape joint/repair", "tear", "test", "texture", "tongue groove", "treatment", "tree",
+                "paint", "painting", "permits", "per day", "per invoice", "per month", "per week", "plumbing fixture", "polish", 
+                "preparation", "primed", "primer", "prep", "protect", "provide",
+                "recharge", "refacing", "reglaze", "regrout", "reinforced", "remediation", "remove", "removal", 
+                "repair", "replace", "reset", "rescreen", "reskin", "restore repair", "return", "rewire", "roll roofing",
+                "sand", "scarify", "seal", "sealer", "simulated", "software", "spray",
+                "tape joint", "tape joint repair", "tear", "test", "texture", "tongue groove", "treatment", "tree",
                 "wash"
             ]
 
@@ -87,7 +91,11 @@ STOP_REASON_DESC = [
 ]
 
 STOP_ACTIVITIES = [
+    "ADDITIONAL COST FOR HIGH WALL OR CEILING - 11' TO 14' HIGH",
+    "ADDITIONAL COST FOR HIGH WALL OR CEILING - OVER 14' TO 20'",
     'ASPHALT STARTER - PEEL AND STICK',
+    '''BATT INSULATION REPLACEMENT PER LF - 4" - UP TO 2' TALL''',
+    'CAULKING - SILICONE',
     'CONCRETE CUTTING - SLAB (PER LF PER INCH OF SAW DEPTH)',
     'CONCRETE FLOOR SAWING - 4" SLAB',
     'CONCRETE SEALER - BRUSH OR SPRAY APPLIED',
@@ -141,6 +149,7 @@ STOP_ACTIVITIES = [
     'LIGHT FIXTURE (COVER ONLY) - SMALL SIZE',
     'LIGHT FIXTURE (COVER ONLY) - MEDIUM SIZE',
     'LIGHT FIXTURE (COVER ONLY) - LARGE SIZE',
+    'LIGHT STRIP - INCANDESCENT',
     'MOTION SENSOR FOR EXTERIOR LIGHT FIXTURE',
     'PLASTIC CONTRACTOR DEBRIS BAG',
     'PORCELAIN LIGHT FIXTURE',
@@ -150,14 +159,19 @@ STOP_ACTIVITIES = [
     'RECESSED LIGHT FIXTURE - PREMIUM GRADE',
     'RECESSED LIGHT FIXTURE - TRIM ONLY',
     'RECESSED LIGHT FIXTURE - TRIM ONLY - HIGH GRADE',
+    'ROUGH-IN FOR AUDIO/VISUAL SYSTEM (PER SF)',
+    'ROUGH IN PLUMBING - INCLUDES SUPPLY AND WASTE LINES',
     'ROUGH IN PLUMBING - PER FIXTURE',
     "SCARF, SHAWL & WRAP - LADIES' - HIGH GRADE",
+    'SCREW DOWN EXISTING SUBFLOOR - ELIMINATE FLOOR SQUEAKS',
     'SEAM CARPET',
+    'SHEATHING - ADDITIONAL COST FOR H-CLIPS',
     'SHOWER LIGHT - WATERPROOF FIXTURE',
     'SPOT LIGHT FIXTURE - SINGLE',
     'SPOT LIGHT FIXTURE - DOUBLE',
     'SPOT LIGHT FIXTURE - DOUBLE - W/MOTION SENSOR',
     'TRACK LIGHTING - TRACK ONLY',
+    'URETHANE FOAM SEALANT',
     'WRAP CUSTOM FASCIA WITH ALUMINUM (PER LF)', 
     'WRAP WOOD DOOR FRAME & TRIM WITH ALUMINUM (PER LF)',
     'WRAP WOOD GARAGE DOOR FRAME & TRIM WITH ALUMINUM (PER LF)',
@@ -168,12 +182,13 @@ STOP_ACTIVITIES = [
     'WRAP WOOD WINDOW FRAME & TRIM WITH ALUMINUM SHEET - XLARGE'
 ]
 
+
 STOP_CLAIM_IDS = [
     "tear off"
 ]
 
 ZERO_WEIGHT_CLAIMS = [
-    "concrete slab"
+    "concrete slab", "in place"
 ]
 
 ALL_STOP_CLAIMS = STOP_CLAIMS + STOP_SMALL_ITEM_CLAIMS + STOP_DONATED_REPURPOSED_CLAIMS
@@ -209,6 +224,53 @@ FIELD_RENAME_MAP = {
     "ITM_UNIT_CD" : "item_unit_cd",
     "ITM_QTY" : "item_quantity",
     "count1" : "count"
+}
+
+
+CLIENT_OUTPUT_RENAME_GENERAL = {
+    'claim_id': 'Claim Number',
+    'date': 'Date of Claim',
+    'total_items': 'Number of items in claim needing collection'
+}
+
+CLIENT_OUTPUT_RENAME_XACTIMATE = {
+    'total_truck_weight': 'Estimated weight of items needing collection (US Tons)',
+    'truck_weights': 'Xactimate Waste Recommendation (Size - US Tons)',
+    'truck_qty': 'Xactimate Waste Recommendation (Qty)',
+    'total_truck_cost': 'Xactimate Estimated Cost for Waste Recommendation ($)'
+}
+
+CLIENT_OUTPUT_RENAME_PHOENIX = {
+    'weight_estimation_ustons_median_median': 'Phoenix Estimated Weight (US Tons)',
+    'estimated_truck_weights_median_median': 'Phoenix Waste Recommendation (Size - US Tons)',
+    'estimated_truck_qty_median_median': 'Phoenix Waste recommendation (Qty)',
+    'estimated_cost_median_median': 'Phoenix Estimated Cost for Waste Recommendation ($)'
+}
+
+CLIENT_OUTPUT_RENAME_SAVINGS = {
+    'excessive_truck_weight_ustons_median_median': 'Weight Difference (US tons)',
+    'excessive_cost_median_median': 'Cost Difference ($)',
+    'relative_excessive_cost_median_median': 'Saving (%)'
+}
+
+CLIENT_OUTPUT_RENAME_MATCHING = {
+    'total_id_matching_fraction': 'Fraction of matched claims (%)'
+}
+
+CLIENT_OUTPUT_RENAME_MAP = {
+    **CLIENT_OUTPUT_RENAME_GENERAL, 
+    **CLIENT_OUTPUT_RENAME_XACTIMATE, 
+    **CLIENT_OUTPUT_RENAME_PHOENIX, 
+    **CLIENT_OUTPUT_RENAME_SAVINGS, 
+    **CLIENT_OUTPUT_RENAME_MATCHING
+}
+
+CLIENT_OUTPUT_COLORS = {
+    "General" : "#C0C0C0",
+    "Xactimate" : "#FF8080",
+    "Phoenix" : "#00FFFF",
+    "Savings" : "#339966",
+    "Matching" : "yellow"
 }
 
 ZIP_DB_FIELDS = [

@@ -177,9 +177,36 @@ class ClaimDataLoader(object):
 
             total_claims_start = data.shape[0]
 
-            regex_keep_claims = ";".join(constants.KEEP_ITEMS)
+            total_item_descriptions = data["item_description_processed"].values.tolist()
+            total_categories = data["subcategory_prev_processed"].values.tolist()
 
-            regex_keep_claims_expr = format_and_regex(regex_keep_claims)
+            log_and_warn(
+                "Total {} raw claims are collected from data".format(total_claims_start)
+            )
+
+            regex_keep_claims_expr = format_and_regex(";".join(constants.KEEP_ITEMS))
+
+            keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                            flags=re.IGNORECASE,
+                            regex=True) | \
+                    data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
+                            flags=re.IGNORECASE,
+                            regex=True)           
+
+            keep_data = data[keep_mask].copy()
+
+            total_keep_items = keep_data.shape[0]
+
+            data = data[~keep_mask]
+
+            log_and_warn(
+                "Total {}/{} raw claims are marked to be removed from processing list".format(
+                                    total_keep_items,
+                                    total_claims_start  
+                                ))
+
+            remaining_item_desc     = data["item_description_processed"].dropna().unique().tolist()
+            remaining_category_desc = data["subcategory_prev_processed"].dropna().unique().tolist()
 
             logging.info("Processing {} stop claim IDs...".format(len(constants.STOP_CLAIM_IDS)))
 
@@ -188,44 +215,40 @@ class ClaimDataLoader(object):
 
                 regex_stop_claims_expr = format_and_regex(stop_claim)
 
-                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+                compiled_regex_desc = re.compile(regex_stop_claims_expr)
 
-                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
+                logging.info("Regex expression: {}".format(regex_stop_claims_expr))
 
-                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)  
+                roofing_regex_desc = re.compile('(?i:roofing)')
+                roofing_item_desc = list(filter(roofing_regex_desc.match, remaining_category_desc))
 
-                stop_claims_mask &= ~keep_mask   
+                matched_item_desc = list(filter(compiled_regex_desc.match, remaining_item_desc))
+                matched_category_desc = list(filter(compiled_regex_desc.match, remaining_category_desc))
+
+                stop_claims_mask = data["subcategory_prev_processed"].isin(matched_category_desc) | \
+                        data["item_description_processed"].isin(matched_item_desc)
+
+                stop_claim_ids = data.loc[stop_claims_mask, "claim_id"].unique().tolist()
 
                 log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
+                "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                data.shape[0]+total_keep_items,
+                                stop_claim
+                                ))
 
-                roofing_mask = data["subcategory_prev_processed"].str.contains("roofing", 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
-    
-                stop_claim_ids = data.loc[stop_claims_mask & roofing_mask, "claim_id"].unique().tolist()
-                remove_mask = data["claim_id"].isin(stop_claim_ids) & roofing_mask
+                remove_mask = (data["claim_id"].isin(stop_claim_ids) & \
+                        data["subcategory_prev_processed"].isin(roofing_item_desc))
 
                 log_and_warn("Total {}/{} roofing claims are filtered out according to {}".format(remove_mask.sum(),
-                                                                                                    data.shape[0],
-                                                                                                    stop_claim
-                                                                                                ))
+                                    data.shape[0]+total_keep_items,
+                                    stop_claim
+                                    ))
 
                 if remove_mask.sum() > 0:
                     data = data[~remove_mask]
+
+                remaining_item_desc = list(set(remaining_item_desc) - set(matched_item_desc))
+                remaining_category_desc = list(set(remaining_category_desc) - set(matched_category_desc))
 
             logging.info("Processing stop claims containing {} substrings...".format(len(constants.STOP_CLAIMS_CONTAINING)))
 
@@ -233,33 +256,27 @@ class ClaimDataLoader(object):
                 logging.info("Processing stop item {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim, special_delimiters=None)
+                logging.info("Regex expression: {}".format(regex_stop_claims_expr))
 
-                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+                compiled_regex_desc = re.compile(regex_stop_claims_expr)
 
-                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
+                matched_item_desc = list(filter(compiled_regex_desc.match, remaining_item_desc))
+                matched_category_desc = list(filter(compiled_regex_desc.match, remaining_category_desc))
 
-                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                            data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
-
-                stop_claims_mask &= ~keep_mask   
+                stop_claims_mask = data["subcategory_prev_processed"].isin(matched_category_desc) | \
+                        data["item_description_processed"].isin(matched_item_desc)
 
                 log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
+                "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                data.shape[0]+total_keep_items,
+                                stop_claim
+                                ))
 
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
+
+                remaining_item_desc = list(set(remaining_item_desc) - set(matched_item_desc))
+                remaining_category_desc = list(set(remaining_category_desc) - set(matched_category_desc))
 
             logging.info("Processing stop claims precisely matching {} items...".format(len(constants.STOP_CLAIMS_PRECISE_MATCHING)))
 
@@ -268,27 +285,23 @@ class ClaimDataLoader(object):
 
                 regex_stop_claims_expr = "(?i:{})".format(stop_claim)
 
-                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+                logging.info("Regex expression: {}".format(regex_stop_claims_expr))
 
-                stop_claims_mask = data["item_description_processed"].astype(str).str.match(regex_stop_claims_expr)
+                compiled_regex_desc = re.compile(regex_stop_claims_expr)
+                matched_item_desc = list(filter(compiled_regex_desc.match, remaining_item_desc))
 
-                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                            data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
-
-                stop_claims_mask &= ~keep_mask   
+                stop_claims_mask = data["item_description_processed"].isin(matched_item_desc)  
 
                 log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
+                "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                data.shape[0]+total_keep_items,
+                                stop_claim
+                                ))
 
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
+
+                remaining_item_desc = list(set(remaining_item_desc) - set(matched_item_desc))
 
             logging.info("Processing stop claims containing {} patterns...".format(len(constants.ALL_STOP_CLAIMS)))
 
@@ -296,33 +309,27 @@ class ClaimDataLoader(object):
                 logging.info("Processing stop item {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim)
+                logging.info("Regex expression: {}".format(regex_stop_claims_expr))
 
-                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+                compiled_regex_desc = re.compile(regex_stop_claims_expr)
 
-                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
+                matched_item_desc = list(filter(compiled_regex_desc.match, remaining_item_desc))
+                matched_category_desc = list(filter(compiled_regex_desc.match, remaining_category_desc))
 
-                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                            data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)   
-
-                stop_claims_mask &= ~keep_mask   
+                stop_claims_mask = data["subcategory_prev_processed"].isin(matched_category_desc) | \
+                        data["item_description_processed"].isin(matched_item_desc)  
 
                 log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
+                "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                data.shape[0]+total_keep_items,
+                                stop_claim
+                                ))
 
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
+
+                remaining_item_desc = list(set(remaining_item_desc) - set(matched_item_desc))
+                remaining_category_desc = list(set(remaining_category_desc) - set(matched_category_desc))
 
             logging.info("Processing {} stop categories...".format(len(constants.STOP_CATEGORIES)))
 
@@ -330,63 +337,24 @@ class ClaimDataLoader(object):
                 logging.info("Processing stop category {}...".format(stop_claim))
 
                 regex_stop_claims_expr = format_and_regex(stop_claim)
+                logging.info("Regex expression: {}".format(regex_stop_claims_expr))
 
-                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+                compiled_regex_desc = re.compile(regex_stop_claims_expr)
 
-                stop_claims_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                                    data["item_description_processed"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
+                matched_category_desc = list(filter(compiled_regex_desc.match, remaining_category_desc))
 
-                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)        
-                stop_claims_mask &= ~keep_mask       
+                stop_claims_mask = data["subcategory_prev_processed"].isin(matched_category_desc)     
 
                 log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
+                "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                data.shape[0]+total_keep_items,
+                                stop_claim
+                                ))
 
                 if stop_claims_mask.sum() > 0:
                     data = data[~stop_claims_mask]
 
-            logging.info("Processing {} stop reasons...".format(len(constants.STOP_REASON_DESC)))
-
-            for stop_claim in constants.STOP_REASON_DESC:
-                logging.info("Processing stop reason {}...".format(stop_claim))
-
-                regex_stop_claims_expr = format_and_regex(stop_claim)
-
-                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
-
-                stop_claims_mask = data["primary_col_desc"].astype(str).str.contains(regex_stop_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)
-
-                keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)        
-                stop_claims_mask &= ~keep_mask
-
-                log_and_warn(
-                        "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
-                                                                                        data.shape[0],
-                                                                                        stop_claim
-                                                                                    ))
-
-
-                if stop_claims_mask.sum() > 0:
-                    data = data[~stop_claims_mask]   
+                remaining_category_desc = list(set(remaining_category_desc) - set(matched_category_desc))
 
             logging.info("Processing {} stop activities...".format(len(constants.STOP_ACTIVITIES)))
 
@@ -399,27 +367,49 @@ class ClaimDataLoader(object):
 
             stop_activities_mask = data["item_description_processed"].isin(stop_activities)
 
-            keep_mask = data["subcategory_prev_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True) | \
-                        data["item_description_processed"].astype(str).str.contains(regex_keep_claims_expr, 
-                                                                        flags=re.IGNORECASE,
-                                                                        regex=True)  
-
-            stop_activities_mask &= ~keep_mask
-
             log_and_warn(
-                        "Total {}/{} claims are filtered out according to stop activities".format(stop_activities_mask.sum(),
-                                                                                        data.shape[0]
-                                                                                    ))
+                "Total {}/{} claims are filtered out according to stop activities".format(stop_activities_mask.sum(),
+                                data.shape[0]+total_keep_items
+                                ))
 
             if stop_activities_mask.sum() > 0:
-                data = data[~stop_activities_mask]                                                                        
-    
+                data = data[~stop_activities_mask] 
+
+                remaining_item_desc = list(set(remaining_item_desc) - set(stop_activities))
+
+            logging.info("Processing {} stop reasons...".format(len(constants.STOP_REASON_DESC)))
+
+            for stop_claim in constants.STOP_REASON_DESC:
+                logging.info("Processing stop reason {}...".format(stop_claim))
+
+                regex_stop_claims_expr = format_and_regex(stop_claim)
+
+                logging.info("Regex pattern: {}".format(regex_stop_claims_expr))
+
+                compiled_regex_desc = re.compile(regex_stop_claims_expr)
+
+                remaining_reason_desc = data.loc[~keep_mask, "primary_col_desc"].dropna().unique().tolist()
+
+                matched_reason_desc = list(filter(compiled_regex_desc.match, remaining_reason_desc))
+
+                stop_claims_mask = data["primary_col_desc"].isin(matched_reason_desc)  
+
+                log_and_warn(
+                "Total {}/{} claims are filtered out according to {}".format(stop_claims_mask.sum(),
+                                data.shape[0]+total_keep_items,
+                                stop_claim
+                                ))
+
+
+                if stop_claims_mask.sum() > 0:
+                    data = data[~stop_claims_mask] 
+
+            data = pd.concat([data, keep_data])
+
             log_and_warn(
-                        "Total {}/{} claims are filtered out according to all stop categories, activites and claims".format(total_claims_start-data.shape[0],
-                                                                                        total_claims_start
-                                                                                    ))
+                    "Total {}/{} claims are filtered out according to all stop categories, activites and claims".format(total_claims_start-data.shape[0],
+                                                total_claims_start
+                                                ))
 
             data = self.match_zip_codes(data)
 

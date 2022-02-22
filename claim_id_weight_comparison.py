@@ -1,12 +1,8 @@
+import argparse
+
+import matplotlib as mpl
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
-from scipy.stats import norm, gaussian_kde
-
-from config import config
-import config as constants
-
-import importlib
-importlib.reload(constants)
 
 import numpy as np
 import pandas as pd
@@ -15,6 +11,31 @@ from pandas import ExcelWriter
 import re
 import time
 
+from scipy import integrate
+from scipy.stats import norm, gaussian_kde
+
+from config import config
+import config as constants
+
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
+
+ap = argparse.ArgumentParser(description="Claim ID weights calculation")
+ap.add_argument("-m" ,"--method", 
+                required=True, 
+                choices=['only_dumpster_loads', 'pickup_trucks', 'all_trucks'],
+                help="Collection method: only_dumpster_loads, pickup_trucks, no_axle, all")
+ap.add_argument("--axle", 
+                action='store_true',
+                help="Include claim IDs with axle dumps")
+ap.add_argument("--no_axle", 
+                action='store_true',
+                help="exclude claim IDs with axle dumps")
+args = ap.parse_args()
+
+method = args.method
+no_axle = args.no_axle
+    
 db_version = config["data"]["db_version"]
 # Path to input matched data
 filepath = "{0}/{1}/claims_weight_db_matched_weights_{1}.csv".format(config["data"]["output_dir"], db_version)
@@ -26,48 +47,54 @@ truck_id = "DUMPSTER LOAD"
 pickup_id = "PICKUP TRUCK LOAD"
 axle_id = "AXLE DUMP"
 
-# Keep claim IDs with only dumpster load collection method
-
-# no_dumpster_load_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
-#                         (data["item_description"].str.contains(truck_id, flags=re.IGNORECASE, regex=True) == False)
-# no_dumpster_load_ids = data.loc[no_dumpster_load_mask, "claim_id"].unique().tolist()
-
 total_ids_initial = len(data["claim_id"].unique().tolist())
 
-# data = data[~data["claim_id"].isin(no_dumpster_load_ids)]
+if method == "only_dumpster_loads":
+    print("Using claim IDs with only DUMPSTER LOAD collection method")
 
-# print("Total {}/{} claim IDs contain only dumpster load collection method".format(total_ids_initial-len(no_dumpster_load_ids),
-#                                                                                  total_ids_initial)
-#      )
+    # Keep claim IDs with only dumpster load collection method
+    no_dumpster_load_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
+                            (data["item_description"].str.contains(truck_id, flags=re.IGNORECASE, regex=True) == False)
+    no_dumpster_load_ids = data.loc[no_dumpster_load_mask, "claim_id"].unique().tolist()
 
-# truck_data = data[truck_mask].copy()
+    data = data[~data["claim_id"].isin(no_dumpster_load_ids)]
 
-#Data for pickup trucks loads
-pickup_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
-            data["item_description"].str.contains(pickup_id, flags=re.IGNORECASE, regex=True)
-# pickup_data = data[pickup_mask].copy()
+    print("Selected {}/{} claim IDs with only DUMPSTER LOAD collection method".format(total_ids_initial-len(no_dumpster_load_ids),
+                                                                                    total_ids_initial)
+        )
+elif method == "pickup_trucks":
+    print("Using claim IDs with PICKUP TRUCK and other collection methods")
 
-axle_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
+    # Keep claim IDs with pickup truck collection method (other methods allowed as well)
+    pickup_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
+                data["item_description"].str.contains(pickup_id, flags=re.IGNORECASE, regex=True)
+
+    pickup_ids = data.loc[pickup_mask, "claim_id"].unique().tolist()
+
+    data = data[data["claim_id"].isin(pickup_ids)]
+
+    print("Selected {}/{} claim IDs with PICKUP TRUCK collection method".format(len(pickup_ids),
+                                                                                 total_ids_initial)
+    )
+elif method == "all_trucks":
+    print("Using all claim IDs")
+
+
+if no_axle:
+    print("Excluding claim IDs with AXLE DUMP collection methods")
+
+    axle_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
             data["item_description"].str.contains(axle_id, flags=re.IGNORECASE, regex=True)
 
-pickup_ids = data.loc[pickup_mask, "claim_id"].unique().tolist()
-axle_ids = data.loc[axle_mask, "claim_id"].unique().tolist()
+    axle_ids = data.loc[axle_mask, "claim_id"].unique().tolist()
 
-print("Total {}/{} claim IDs contain pickup truck collection method".format(len(pickup_ids),
+    data = data[~data["claim_id"].isin(axle_ids)]
+
+    print("Excluded {}/{} claim IDs with AXLE DUMP collection method".format(len(axle_ids),
                                                                                  total_ids_initial)
      )
 
-print("Total {}/{} claim IDs contain axle dump collection method".format(len(axle_ids),
-                                                                                 total_ids_initial)
-     )
-
-pickup_no_axle_ids = list(set(pickup_ids).difference(axle_ids))
-
-data = data[data["claim_id"].isin(pickup_no_axle_ids)]
-
-print("Total {}/{} claim IDs contain pickup truck collection method (no axle dumps)".format(len(pickup_no_axle_ids),
-                                                                                 total_ids_initial)
-     )
+filename_suffix = method + "_no_axle" if no_axle else method
 
 truck_mask = data["subcategory_prev"].str.contains("GENERAL DEMOLITION", flags=re.IGNORECASE, regex=True) & \
             data["item_description"].str.contains(truck_id, flags=re.IGNORECASE, regex=True)
@@ -211,19 +238,6 @@ aggregate_args = {
 for col in weight_columns:
     aggregate_args["weight_estimation_ustons" + col.partition("ustons")[-1]] = (col, "sum")
 
-# Aggregate claim data for each claim ID
-# claim_id_data = data[~truck_mask].groupby(["claim_id"]).agg(
-#     total_claims=("item_description", "count"),
-#     total_items=("count", "sum"),
-#     total_truck_weight=("total_truck_weight", "last"),
-#     # weight_estimation_lbs=("item_weight_lbs", "sum"),
-#     weight_estimation_ustons=("item_weight_ustons", "sum"),
-#     # volume_estimation_cf=("item_volume_cf", "sum"),
-#     # volume_estimation_cy=("item_volume_cy", "sum"),
-#     ID_matched_fraction=("pentatonic_id", matching_fraction),
-#     matched_fraction=("item_weight_lbs", matching_fraction)
-# )
-
 claim_id_data = data.groupby(["claim_id"]).agg(**aggregate_args).reset_index()
 
 weight_columns = [col for col in claim_id_data.columns if "weight_estimation_ustons" in col]
@@ -242,12 +256,6 @@ output_path = "{0}/{1}".format(config["data"]["output_dir"], db_version)
 
 
 suffixes = [col.partition("ustons_")[-1] for col in claim_id_data.columns if col.startswith("weight_estimation_ustons")]
-
-columns = ['claim_id', 'zip', 'total_claims', 'total_items', 'total_truck_weight', 'total_truck_cost', 
-           'total_id_matching_fraction', 'single_id_matching_fraction', 'multiple_id_matching_fraction', 
-           'primary_matching_fraction']
-# claim_id_data.to_excel("{}/claim_id_weight_comparison_{}_pickup_trucks.xlsx".format(output_path, db_version))
-
 
 prices_data = pd.read_csv("data/collection_methods.csv")
 
@@ -369,16 +377,9 @@ for col in weight_columns:
     
     new_col = "estimated_cost" + col_suffix
     
-    # Without density sorting
     claim_id_data[[new_col, "estimated_truck_qty" + col_suffix, "estimated_truck_weights" + col_suffix]] = claim_id_data.apply(lambda row: minimize_estimation_cost(row, weights, costs, col_suffix), axis=1)
     claim_id_data["excessive_cost" + col_suffix] = claim_id_data["total_truck_cost"] - claim_id_data[new_col]
     claim_id_data["relative_excessive_cost" + col_suffix] = round(claim_id_data["excessive_cost" + col_suffix]/claim_id_data["total_truck_cost"]*100,2)
-    
-#     # With density sorting
-#     density, costs_, weights_ = zip(*sorted((c/w, c, w) for c, w in zip(costs, weights)))
-#     claim_id_data[new_col+"_sorted"] = claim_id_data.apply(lambda row: minimize_estimation_cost(row, weights_, costs_, col_suffix), axis=1)
-#     claim_id_data["excessive_cost_sorted" + col_suffix] = claim_id_data["total_truck_cost"] - claim_id_data[new_col+"_sorted"]
-#     claim_id_data["relative_excessive_cost_sorted" + col_suffix] = round(claim_id_data["excessive_cost" + col_suffix]/claim_id_data["total_truck_cost"]*100,2)
 
 suffixes = [col.partition("ustons_")[-1] for col in claim_id_data.columns if col.startswith("weight_estimation_ustons")]
 
@@ -387,15 +388,13 @@ columns = ['claim_id', 'zip', 'total_claims', 'total_items', 'total_truck_weight
            'total_id_matching_fraction', 'single_id_matching_fraction', 'multiple_id_matching_fraction', 
            'primary_matching_fraction']
 
-excel_name = "{}/claim_id_weight_comparison_{}_pickup_trucks.xlsx".format(output_path, db_version)
+excel_name = "{}/claim_id_weight_comparison_{}_{}.xlsx".format(output_path, filename_suffix, db_version)
 
 plot_mask = (claim_id_data["total_truck_cost"] > 0) & (claim_id_data["estimated_cost_median_median"] > 0) 
     
 total_excessive_costs = claim_id_data.loc[plot_mask, "excessive_cost_median_median"].dropna().sum()
-# total_excessive_costs_sorted = claim_id_data.loc[plot_mask, "excessive_cost_sorted_median_median"].dropna().sum()
 
 print("Total excessive costs: {:.1f} $".format(total_excessive_costs))
-# print("Total sorted excessive costs: {:.1f} $".format(total_excessive_costs_sorted))
 
 start_time = time.time()
 
@@ -418,63 +417,63 @@ with ExcelWriter(excel_name, engine='xlsxwriter') as writer:
             
 print("Total time elapsed: {} s".format(time.time()-start_time))
 
-id_matching_fractions = [0, 0.25, 0.5, 0.75, 1]
-id_col = "single_id_matching_fraction"
-
-
-valid_weight_mask = (claim_id_data["total_truck_weight"] > 0) & (claim_id_data["weight_estimation_ustons_median_median"] > 0) & \
-                            (claim_id_data[id_col] > 0.75) & \
-                            (claim_id_data[id_col] <= 1.)
-
-final_data = claim_id_data[valid_weight_mask]
-
-columns = ['claim_id', 'date', 'total_id_matching_fraction', 'total_items', 
-           'total_truck_weight', 'truck_weights', 'truck_qty', 'total_truck_cost']
-
-excel_name = "{}/final_only_positive_claim_id_weight_comparison_{}_pickup_trucks.xlsx".format(output_path, db_version)
-
 plot_mask = (claim_id_data["total_truck_cost"] > 0) & (claim_id_data["estimated_cost_median_median"] > 0) 
     
 total_excessive_costs = claim_id_data.loc[plot_mask, "excessive_cost_median_median"].dropna().sum()
-# total_excessive_costs_sorted = claim_id_data.loc[plot_mask, "excessive_cost_sorted_median_median"].dropna().sum()
-
 print("Total excessive costs: {:.1f} $".format(total_excessive_costs))
-# print("Total sorted excessive costs: {:.1f} $".format(total_excessive_costs_sorted))
+
+output_columns = list(constants.CLIENT_OUTPUT_RENAME_MAP)
+
+output_data = claim_id_data[output_columns]
+output_data['total_id_matching_fraction'] = output_data['total_id_matching_fraction'].copy() * 100
+
+output_data = output_data.rename(columns=constants.CLIENT_OUTPUT_RENAME_MAP)
+
+excel_name = "{}/client_Xactimate_vs_Phoenix_{}_{}.xlsx".format(output_path, filename_suffix, db_version)
 
 start_time = time.time()
 
-suffixes = ["median_median"]
-
 with ExcelWriter(excel_name, engine='xlsxwriter') as writer:
-    for suffix in suffixes:
-        save_cols = columns+[c for c in final_data.columns if "median_median" in c]
-        add_mask = (final_data["excessive_truck_weight_ustons_median_median"] > 0)
-        save_df = final_data.loc[add_mask, save_cols]
+    output_data.to_excel(writer, sheet_name="median_median", index=False)
+
+    workbook = writer.book
+
+    colors = {}
+
+    for key, color in constants.CLIENT_OUTPUT_COLORS.items():
+        colors[key] = workbook.add_format({'bg_color': color})
+
+    worksheet = writer.sheets["median_median"]
+    for idx, col in enumerate(output_data):  # loop through all columns
+        series = output_data[col]
+        max_len = max((
+            series.astype(str).map(len).max(),  # len of largest item
+            len(str(series.name))  # len of column name/header
+            )) + 1  # adding a little extra space
         
-        final_data['total_id_matching_fraction'] = final_data['total_id_matching_fraction'] * 100
-        
-        save_df.to_excel(writer, sheet_name=suffix, index=False)
-        
-        worksheet = writer.sheets[suffix]
-        for idx, col in enumerate(save_df):  # loop through all columns
-            series = save_df[col]
-            max_len = max((
-                series.astype(str).map(len).max(),  # len of largest item
-                len(str(series.name))  # len of column name/header
-                )) + 1  # adding a little extra space
-            worksheet.set_column(idx, idx, max_len)  # set column width
+        worksheet.set_column(idx, idx, max_len)
+        # if col in constants.CLIENT_OUTPUT_RENAME_GENERAL.values():
+        #     worksheet.set_column(idx, idx, max_len, colors["General"])  # set column width and color
+        # elif col in constants.CLIENT_OUTPUT_RENAME_XACTIMATE.values():
+        #     worksheet.set_column(idx, idx, max_len, colors["Xactimate"])  # set column width and color
+        # elif col in constants.CLIENT_OUTPUT_RENAME_PHOENIX.values():
+        #     worksheet.set_column(idx, idx, max_len, colors["Phoenix"])  # set column width and color
+        # elif col in constants.CLIENT_OUTPUT_RENAME_SAVINGS.values():
+        #     worksheet.set_column(idx, idx, max_len, colors["Savings"])  # set column width and color
+        # elif col in constants.CLIENT_OUTPUT_RENAME_MATCHING.values():
+        #     worksheet.set_column(idx, idx, max_len, colors["Matching"])  # set column width and color
+
+        # border_fmt = workbook.add_format({'bottom':5, 'top':5, 'left':5, 'right':5})
+        # worksheet.conditional_format(writer.utility.xl_range(0, 0, max_len, max_len), {'type': 'no_errors', 'format': border_fmt})  
+
     writer.save()            
 print("Total time elapsed: {} s".format(time.time()-start_time))
 
 
-
-import matplotlib as mpl
-mpl.rcParams['text.usetex'] = True
-mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
-
-from scipy import integrate
-
 valid_truck_weight_mask = (claim_id_data["total_truck_weight"] > 0)
+
+id_matching_fractions = [0, 0.25, 0.5, 0.75, 1]
+id_col = "single_id_matching_fraction"
 
 hist_colors = list(mcolors.TABLEAU_COLORS)
 line_colors = list(mcolors.BASE_COLORS)
@@ -532,7 +531,7 @@ fig.set_size_inches(18.5, 10.5, forward=True)
 plt.xlim(-50,50)
 
 file_label = "_{}t".format(abs(down_thres)) if down_thres is not None else ""
-plt.savefig('{}/excessive_truck_weight_frequency_pickup_trucks{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
+plt.savefig('{}/excessive_truck_weight_frequency_{}{}_{}.png'.format(output_path, filename_suffix, file_label, db_version), facecolor='w')
 
 
 
@@ -607,7 +606,7 @@ fig.set_size_inches(18.5, 10.5, forward=True)
 plt.xlim(-50,50)
 
 file_label = "_{}t".format(abs(down_thres)) if down_thres is not None else ""
-plt.savefig('{}/excessive_truck_weight_frequency_pickup_trucks_IDmatching{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
+plt.savefig('{}/excessive_truck_weight_frequency_{}_IDmatching{}_{}.png'.format(output_path, filename_suffix, file_label, db_version), facecolor='w')
 
 
 
@@ -655,7 +654,7 @@ fig.set_size_inches(18.5, 10.5, forward=True)
 
 plt.xlim(-100,100)
 
-plt.savefig('{}/relative_excessive_truck_cost_frequency_pickup_trucks{}_{}.png'.format(output_path, file_label, db_version), facecolor='w')
+plt.savefig('{}/relative_excessive_truck_cost_frequency_{}{}_{}.png'.format(output_path, filename_suffix, file_label, db_version), facecolor='w')
 
 
 
